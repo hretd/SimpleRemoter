@@ -317,6 +317,7 @@
     <ClInclude Include="IOCPUDPServer.h" />
     <ClInclude Include="KeyBoardDlg.h" />
     <ClInclude Include="LangManager.h" />
+    <ClInclude Include="NetworkDlg.h" />
     <ClInclude Include="NotifyConfig.h" />
     <ClInclude Include="NotifyManager.h" />
     <ClInclude Include="NotifySettingsDlg.h" />
@@ -418,6 +419,7 @@
     <ClCompile Include="IOCPServer.cpp" />
     <ClCompile Include="IOCPUDPServer.cpp" />
     <ClCompile Include="KeyBoardDlg.cpp" />
+    <ClCompile Include="NetworkDlg.cpp" />
     <ClCompile Include="NotifyManager.cpp" />
     <ClCompile Include="NotifySettingsDlg.cpp" />
     <ClCompile Include="Loader.c">

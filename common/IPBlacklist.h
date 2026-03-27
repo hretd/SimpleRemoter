@@ -1,9 +1,11 @@
-// IPWhitelist.h - IP 白名单管理 (单例)
-// 用于多处共享白名单检查：连接限制、DLL 限流等
+// IPBlacklist.h - IP 黑名单管理 (单例)
+// 用于拒绝特定 IP 的所有请求
 
 #pragma once
 #include <string>
 #include <set>
+#include <map>
+#include <ctime>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -11,14 +13,14 @@
 #include <pthread.h>
 #endif
 
-class IPWhitelist {
+class IPBlacklist {
 public:
-    static IPWhitelist& getInstance() {
-        static IPWhitelist instance;
+    static IPBlacklist& getInstance() {
+        static IPBlacklist instance;
         return instance;
     }
 
-    // 从配置字符串加载白名单 (格式: "192.168.1.1;10.0.0.1;172.16.0.0/24")
+    // 从配置字符串加载黑名单 (格式: "192.168.1.1;10.0.0.1")
     void Load(const std::string& configValue) {
         AutoLock lock(m_Lock);
         m_IPs.clear();
@@ -38,42 +40,45 @@ public:
         AddIPInternal(configValue.substr(start));
     }
 
-    // 检查 IP 是否在白名单中
-    bool IsWhitelisted(const std::string& ip) {
-        // 本地地址始终白名单（无需加锁）
+    // 检查 IP 是否在黑名单中
+    bool IsBlacklisted(const std::string& ip) {
+        // 本地地址永不加入黑名单
         if (ip == "127.0.0.1" || ip == "::1") {
-            return true;
+            return false;
         }
 
         AutoLock lock(m_Lock);
         return m_IPs.find(ip) != m_IPs.end();
     }
 
-    // 获取白名单数量
-    size_t Count() {
-        AutoLock lock(m_Lock);
-        return m_IPs.size();
-    }
-
-    // 添加 IP 到白名单
+    // 添加 IP 到黑名单
     void AddIP(const std::string& ip) {
+        if (ip == "127.0.0.1" || ip == "::1") {
+            return;  // 本地地址不能加入黑名单
+        }
         AutoLock lock(m_Lock);
         AddIPInternal(ip);
     }
 
-    // 从白名单移除 IP
+    // 从黑名单移除 IP
     void RemoveIP(const std::string& ip) {
         AutoLock lock(m_Lock);
         m_IPs.erase(ip);
     }
 
-    // 获取所有白名单 IP（用于显示）
+    // 获取黑名单数量
+    size_t Count() {
+        AutoLock lock(m_Lock);
+        return m_IPs.size();
+    }
+
+    // 获取所有黑名单 IP（用于显示）
     std::set<std::string> GetAll() {
         AutoLock lock(m_Lock);
         return m_IPs;
     }
 
-    // 清空白名单
+    // 清空黑名单
     void Clear() {
         AutoLock lock(m_Lock);
         m_IPs.clear();
@@ -88,6 +93,18 @@ public:
             result += ip;
         }
         return result;
+    }
+
+    // 检查是否应该记录日志（防刷频，同一 IP 每 60 秒最多记录一次）
+    bool ShouldLog(const std::string& ip) {
+        AutoLock lock(m_Lock);
+        time_t now = time(nullptr);
+        auto it = m_LastLogTime.find(ip);
+        if (it == m_LastLogTime.end() || (now - it->second) >= 60) {
+            m_LastLogTime[ip] = now;
+            return true;
+        }
+        return false;
     }
 
 private:
@@ -110,7 +127,7 @@ private:
     };
 #endif
 
-    IPWhitelist() {
+    IPBlacklist() {
 #ifdef _WIN32
         InitializeCriticalSection(&m_Lock);
 #else
@@ -118,7 +135,7 @@ private:
 #endif
     }
 
-    ~IPWhitelist() {
+    ~IPBlacklist() {
 #ifdef _WIN32
         DeleteCriticalSection(&m_Lock);
 #else
@@ -127,20 +144,21 @@ private:
     }
 
     // 禁止拷贝
-    IPWhitelist(const IPWhitelist&) = delete;
-    IPWhitelist& operator=(const IPWhitelist&) = delete;
+    IPBlacklist(const IPBlacklist&) = delete;
+    IPBlacklist& operator=(const IPBlacklist&) = delete;
 
     void AddIPInternal(const std::string& ip) {
         std::string trimmed = ip;
         // 去除空格
         while (!trimmed.empty() && trimmed.front() == ' ') trimmed.erase(0, 1);
         while (!trimmed.empty() && trimmed.back() == ' ') trimmed.pop_back();
-        if (!trimmed.empty()) {
+        if (!trimmed.empty() && trimmed != "127.0.0.1" && trimmed != "::1") {
             m_IPs.insert(trimmed);
         }
     }
 
     std::set<std::string> m_IPs;
+    std::map<std::string, time_t> m_LastLogTime;  // 防刷频：记录每个 IP 最后日志时间
 #ifdef _WIN32
     CRITICAL_SECTION m_Lock;
 #else

@@ -607,6 +607,22 @@
 #define IDC_SEARCH_NEXT                 2442
 #define IDC_SEARCH_CLOSE                2443
 #define IDC_SEARCH_COUNT                2444
+#define IDD_DIALOG_NETWORK              336
+#define IDC_LIST_WHITELIST              2450
+#define IDC_LIST_BLACKLIST              2451
+#define IDC_EDIT_NETWORK_IP             2452
+#define IDC_BTN_ADD_WHITELIST           2453
+#define IDC_BTN_DEL_WHITELIST           2454
+#define IDC_BTN_ADD_BLACKLIST           2455
+#define IDC_BTN_DEL_BLACKLIST           2456
+#define IDC_STATIC_WHITELIST            2457
+#define IDC_STATIC_BLACKLIST            2458
+#define IDC_STATIC_IP_INPUT             2459
+#define IDC_STATIC_NETWORK_HINT         2460
+#define IDC_STATIC_NETWORK_HINT1        2461
+#define IDC_STATIC_NETWORK_HINT2        2462
+#define IDC_STATIC_NETWORK_HINT3        2463
+#define IDC_STATIC_NETWORK_HINT4        2464
 #define ID_ONLINE_UPDATE                32772
 #define ID_ONLINE_MESSAGE               32773
 #define ID_ONLINE_DELETE                32775
@@ -827,14 +843,15 @@
 #define ID_33033                        33033
 #define ID_MASTER_TRAIL                 33034
 #define ID_PARAM_RUN_AS_USER            33035
+#define ID_MAIN_NETWORK                 33036
 #define ID_EXIT_FULLSCREEN              40001
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        333
-#define _APS_NEXT_COMMAND_VALUE         33036
+#define _APS_NEXT_RESOURCE_VALUE        337
+#define _APS_NEXT_COMMAND_VALUE         33037
 #define _APS_NEXT_CONTROL_VALUE         2423
 #define _APS_NEXT_SYMED_VALUE           105
 #endif

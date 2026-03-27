@@ -72,9 +72,11 @@ protected:
     // 白名单已移至 IPWhitelist 单例 (common/IPWhitelist.h)
 
     bool IsIPBanned(const std::string& ip);
+    bool IsIPBlacklisted(const std::string& ip);
     void RecordConnection(const std::string& ip);
     void BanIP(const std::string& ip, int seconds);
     void LoadIPWhitelist();
+    void LoadIPBlacklist();
 
 private:
     static DWORD WINAPI ListenThreadProc(LPVOID lParam);

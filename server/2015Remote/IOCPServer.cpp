@@ -2,6 +2,7 @@
 #include "IOCPServer.h"
 #include "2015Remote.h"
 #include "common/IPWhitelist.h"
+#include "common/IPBlacklist.h"
 
 #include <iostream>
 #include <ws2tcpip.h>
@@ -156,6 +157,25 @@ bool IOCPServer::IsIPBanned(const std::string& ip)
     return false;
 }
 
+// 检查 IP 是否在黑名单中
+bool IOCPServer::IsIPBlacklisted(const std::string& ip)
+{
+    if (IPBlacklist::getInstance().IsBlacklisted(ip)) {
+        // 防刷频日志
+        if (IPBlacklist::getInstance().ShouldLog(ip)) {
+            Mprintf("Connection rejected: %s (blacklisted)\n", ip.c_str());
+            if (m_hMainWnd) {
+                char tip[256];
+                sprintf_s(tip, _TRF("IP %s 连接被拒绝 (黑名单)"), ip.c_str());
+                PostMessageA(m_hMainWnd, WM_SHOWERRORMSG,
+                    (WPARAM)new CString(tip), (LPARAM)new CString(_TR("黑名单")));
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 // 记录连接并检测异常
 void IOCPServer::RecordConnection(const std::string& ip)
 {
@@ -228,6 +248,19 @@ void IOCPServer::LoadIPWhitelist()
     }
 }
 
+// 从配置文件加载 IP 黑名单
+void IOCPServer::LoadIPBlacklist()
+{
+    // 配置格式: IPBlacklist=192.168.1.1;10.0.0.1
+    std::string blacklist = THIS_CFG.GetStr("settings", "IPBlacklist", "");
+    IPBlacklist::getInstance().Load(blacklist);
+
+    size_t count = IPBlacklist::getInstance().Count();
+    if (count > 0) {
+        Mprintf("IP blacklist loaded: %zu IPs\n", count);
+    }
+}
+
 IOCPServer::IOCPServer(HWND hWnd)
 {
     m_hMainWnd = hWnd;
@@ -246,6 +279,7 @@ IOCPServer::IOCPServer(HWND hWnd)
     InitializeCriticalSection(&m_cs);
     InitializeCriticalSection(&m_BanLock);
     LoadIPWhitelist();
+    LoadIPBlacklist();
 
     m_ulWorkThreadCount = 0;
 
@@ -888,9 +922,16 @@ void IOCPServer::OnAccept()
         ContextObject->PeerName = realIP;
     }
 
-    // IP 封禁检查
+    // IP 黑名单和封禁检查
     std::string clientIP = ContextObject->PeerName.empty() ?
                            inet_ntoa(ClientAddr.sin_addr) : ContextObject->PeerName;
+    // 先检查黑名单
+    if (IsIPBlacklisted(clientIP)) {
+        delete ContextObject;
+        closesocket(sClientSocket);
+        return;
+    }
+    // 再检查临时封禁
     if (IsIPBanned(clientIP)) {
         delete ContextObject;
         closesocket(sClientSocket);
