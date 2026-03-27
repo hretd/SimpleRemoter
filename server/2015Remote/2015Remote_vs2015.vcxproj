@@ -315,6 +315,7 @@
     <ClInclude Include="IOCPKCPServer.h" />
     <ClInclude Include="IOCPServer.h" />
     <ClInclude Include="IOCPUDPServer.h" />
+    <ClInclude Include="IPHistoryDlg.h" />
     <ClInclude Include="KeyBoardDlg.h" />
     <ClInclude Include="LangManager.h" />
     <ClInclude Include="NetworkDlg.h" />
@@ -418,6 +419,7 @@
     <ClCompile Include="IOCPKCPServer.cpp" />
     <ClCompile Include="IOCPServer.cpp" />
     <ClCompile Include="IOCPUDPServer.cpp" />
+    <ClCompile Include="IPHistoryDlg.cpp" />
     <ClCompile Include="KeyBoardDlg.cpp" />
     <ClCompile Include="NetworkDlg.cpp" />
     <ClCompile Include="NotifyManager.cpp" />

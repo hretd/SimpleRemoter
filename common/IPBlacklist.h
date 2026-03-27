@@ -99,6 +99,19 @@ public:
     bool ShouldLog(const std::string& ip) {
         AutoLock lock(m_Lock);
         time_t now = time(nullptr);
+
+        // 定期清理过期的日志时间记录 (每 100 次检查一次，或条目超过 1000)
+        if (++m_CleanupCounter >= 100 || m_LastLogTime.size() > 1000) {
+            m_CleanupCounter = 0;
+            for (auto it = m_LastLogTime.begin(); it != m_LastLogTime.end(); ) {
+                if (now - it->second >= 300) {  // 5分钟未活动则清理
+                    it = m_LastLogTime.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
+
         auto it = m_LastLogTime.find(ip);
         if (it == m_LastLogTime.end() || (now - it->second) >= 60) {
             m_LastLogTime[ip] = now;
@@ -159,6 +172,7 @@ private:
 
     std::set<std::string> m_IPs;
     std::map<std::string, time_t> m_LastLogTime;  // 防刷频：记录每个 IP 最后日志时间
+    int m_CleanupCounter = 0;  // 清理计数器
 #ifdef _WIN32
     CRITICAL_SECTION m_Lock;
 #else

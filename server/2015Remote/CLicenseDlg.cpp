@@ -9,6 +9,7 @@
 #include "common/IniParser.h"
 #include "2015RemoteDlg.h"
 #include "InputDlg.h"
+#include "IPHistoryDlg.h"
 #include <algorithm>
 
 // CLicenseDlg 对话框
@@ -662,11 +663,10 @@ void CLicenseDlg::OnLicenseViewIPs()
 
     const int EXPIRY_DAYS = 180;  // 过期天数
 
-    // 解析 IP 列表并格式化显示
-    // 格式: "1.2.3.4(PC01)|260303, 1.2.3.4(PC02)|260215" -> 每行显示一个 IP(机器名)
-    std::string formattedList;
+    // 解析 IP 列表
+    // 格式: "1.2.3.4(PC01)|260303, 1.2.3.4(PC02)|260215"
+    std::vector<IPRecord> records;
     std::string newIPList;  // 用于保存过滤后的 IP 列表
-    int count = 0;
     int removedCount = 0;
 
     size_t start = 0;
@@ -707,49 +707,35 @@ void CLicenseDlg::OnLicenseViewIPs()
             if (!newIPList.empty()) newIPList += ", ";
             newIPList += entry;
 
-            count++;
-
             // 解析 IP 和机器名: "1.2.3.4(PC01)" -> ip="1.2.3.4", machine="PC01"
-            std::string pureIP = ip, machineName;
+            IPRecord record;
+            record.ip = ip;
+            record.timestamp = timestamp;
+            record.daysAgo = daysAgo;
+
             size_t parenPos = ip.find('(');
             if (parenPos != std::string::npos) {
-                pureIP = ip.substr(0, parenPos);
+                record.ip = ip.substr(0, parenPos);
                 size_t endParen = ip.find(')', parenPos);
                 if (endParen != std::string::npos) {
-                    machineName = ip.substr(parenPos + 1, endParen - parenPos - 1);
+                    record.machineName = ip.substr(parenPos + 1, endParen - parenPos - 1);
                 }
             }
 
-            char line[256];
+            // 格式化日期
             if (!timestamp.empty() && (timestamp.length() == 6 || timestamp.length() == 4)) {
-                // 格式化时间戳
                 std::string monthStr, dayStr;
                 if (timestamp.length() == 6) {
-                    // 新格式: yyMMdd -> yy-MM-dd
                     monthStr = timestamp.substr(2, 2);
                     dayStr = timestamp.substr(4, 2);
                 } else {
-                    // 旧格式: MMdd -> MM-dd
                     monthStr = timestamp.substr(0, 2);
                     dayStr = timestamp.substr(2, 2);
                 }
-                if (!machineName.empty()) {
-                    sprintf_s(line, (_L("%d. %s  [%s]  (最后活跃: %s-%s)") + "\r\n").GetString(),
-                        count, pureIP.c_str(), machineName.c_str(),
-                        monthStr.c_str(), dayStr.c_str());
-                } else {
-                    sprintf_s(line, (_L("%d. %s  (最后活跃: %s-%s)") + "\r\n").GetString(),
-                        count, pureIP.c_str(),
-                        monthStr.c_str(), dayStr.c_str());
-                }
-            } else {
-                if (!machineName.empty()) {
-                    sprintf_s(line, "%d. %s  [%s]\r\n", count, pureIP.c_str(), machineName.c_str());
-                } else {
-                    sprintf_s(line, "%d. %s\r\n", count, pureIP.c_str());
-                }
+                record.formattedDate = monthStr + "-" + dayStr;
             }
-            formattedList += line;
+
+            records.push_back(record);
         }
 
         start = end + 1;
@@ -768,34 +754,22 @@ void CLicenseDlg::OnLicenseViewIPs()
     }
 
     // 如果没有有效记录
-    if (count == 0) {
+    if (records.empty()) {
         CString msg;
         msg.Format(_TR("所有 IP 记录均已过期（超过 %d 天），已自动清理"), EXPIRY_DAYS);
         MessageBoxA(msg, _TR("IP 历史"), MB_ICONINFORMATION);
         return;
     }
 
-    // 添加统计信息
-    char summary[128];
-    sprintf_s(summary, (CString("\r\n") + _TR("共 %d 条登录记录")).GetString(), count);
-    formattedList += summary;
-
-    // 显示清理信息
-    if (removedCount > 0) {
-        char cleanupInfo[128];
-        sprintf_s(cleanupInfo, (_L("\r\n（已清理 %d 条过期记录）")).GetString(), removedCount);
-        formattedList += cleanupInfo;
-    }
-
-    // 多机器警告
-    if (count > 1) {
-        formattedList += "\r\n\r\n";
-        formattedList += g_Lang.Get(std::string("[!] 多个 IP/机器登录，请关注"));
-    }
-
+    // 使用对话框显示 IP 历史
     CString strTitle;
     strTitle.Format(_TR("IP 历史 - %s"), lic.SerialNumber.c_str());
-    MessageBoxA(formattedList.c_str(), CT2A(strTitle), MB_ICONINFORMATION);
+
+    CIPHistoryDlg dlg(this);
+    dlg.SetTitle(strTitle);
+    dlg.SetRecords(records);
+    dlg.SetRemovedCount(removedCount);
+    dlg.DoModal();
 }
 
 // 从 IP 列表字符串获取 IP 数量

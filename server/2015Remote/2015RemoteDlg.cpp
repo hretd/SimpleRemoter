@@ -79,9 +79,27 @@
 #define TINY_DLL_NAME "TinyRun.dll"
 #define FRPC_DLL_NAME "Frpc.dll"
 
-// DLL 请求限流：每个 IP 在指定时间内只能成功接收N次 DLL
-#define DLL_RATE_LIMIT_SECONDS 3600  // 1 小时
-#define DLL_RATE_LIMIT_COUNT   4     // 每小时最多请求次数
+// DLL 请求限流配置 (缓存，避免频繁读取注册表)
+static struct {
+    int limitSeconds = 3600;
+    int limitCount = 4;
+    bool loaded = false;
+} g_DllRateLimitConfig;
+
+void ReloadDllRateLimitConfig() {
+    g_DllRateLimitConfig.limitSeconds = THIS_CFG.GetInt("settings", "DllLimitSeconds", 3600);
+    g_DllRateLimitConfig.limitCount = THIS_CFG.GetInt("settings", "DllLimitCount", 4);
+    g_DllRateLimitConfig.loaded = true;
+}
+
+static int GetDllRateLimitSeconds() {
+    if (!g_DllRateLimitConfig.loaded) ReloadDllRateLimitConfig();
+    return g_DllRateLimitConfig.limitSeconds;
+}
+static int GetDllRateLimitCount() {
+    if (!g_DllRateLimitConfig.loaded) ReloadDllRateLimitConfig();
+    return g_DllRateLimitConfig.limitCount;
+}
 
 typedef struct {
     const char*   szTitle;     //列表的名称
@@ -555,7 +573,7 @@ CMy2015RemoteDlg::~CMy2015RemoteDlg()
     }
 }
 
-// DLL 请求限流成员函数实现 (每小时最多 DLL_RATE_LIMIT_COUNT 次)
+// DLL 请求限流成员函数实现 (根据配置限制请求频率)
 bool CMy2015RemoteDlg::IsDllRequestLimited(const std::string& ip)
 {
     // 白名单 IP 不限流
@@ -577,7 +595,7 @@ bool CMy2015RemoteDlg::IsDllRequestLimited(const std::string& ip)
 
     CLock lock(m_DllRateLimitLock);
     time_t now = time(nullptr);
-    time_t cutoff = now - DLL_RATE_LIMIT_SECONDS;
+    time_t cutoff = now - GetDllRateLimitSeconds();
 
     auto it = m_DllRequestTimes.find(ip);
     if (it != m_DllRequestTimes.end()) {
@@ -593,7 +611,7 @@ bool CMy2015RemoteDlg::IsDllRequestLimited(const std::string& ip)
         }
 
         // 检查是否达到限制
-        if (times.size() >= DLL_RATE_LIMIT_COUNT) {
+        if (times.size() >= (size_t)GetDllRateLimitCount()) {
             Mprintf("'%s' DLL request rate limited (%d requests in last hour)\n",
                     ip.c_str(), (int)times.size());
 

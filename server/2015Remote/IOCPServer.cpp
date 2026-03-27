@@ -129,10 +129,33 @@ std::string GetRemoteIP(SOCKET sock)
     return buf;
 }
 
-// IP 连接限流配置
-#define IP_BAN_WINDOW_SECONDS    60     // 统计窗口：60秒
-#define IP_BAN_MAX_CONNECTIONS   15     // 窗口内最大连接数
-#define IP_BAN_DURATION_SECONDS  3600   // 封禁时长：1小时
+// IP 连接限流配置 (缓存，避免频繁读取注册表)
+static struct {
+    int banWindow = 60;
+    int banMaxConn = 15;
+    int banDuration = 3600;
+    bool loaded = false;
+} g_BanConfig;
+
+void ReloadBanConfig() {
+    g_BanConfig.banWindow = THIS_CFG.GetInt("settings", "BanWindow", 60);
+    g_BanConfig.banMaxConn = THIS_CFG.GetInt("settings", "BanMaxConn", 15);
+    g_BanConfig.banDuration = THIS_CFG.GetInt("settings", "BanDuration", 3600);
+    g_BanConfig.loaded = true;
+}
+
+static int GetBanWindowSeconds() {
+    if (!g_BanConfig.loaded) ReloadBanConfig();
+    return g_BanConfig.banWindow;
+}
+static int GetBanMaxConnections() {
+    if (!g_BanConfig.loaded) ReloadBanConfig();
+    return g_BanConfig.banMaxConn;
+}
+static int GetBanDurationSeconds() {
+    if (!g_BanConfig.loaded) ReloadBanConfig();
+    return g_BanConfig.banDuration;
+}
 
 // 检查 IP 是否被封禁
 bool IOCPServer::IsIPBanned(const std::string& ip)
@@ -189,6 +212,20 @@ void IOCPServer::RecordConnection(const std::string& ip)
         CLock lock(m_BanLock);
 
         time_t now = time(nullptr);
+        int banWindow = GetBanWindowSeconds();
+
+        // 定期清理过期的连接计数 (每 1000 次检查一次，或条目超过 10000)
+        static int cleanupCounter = 0;
+        if (++cleanupCounter >= 1000 || m_ConnectionCount.size() > 10000) {
+            cleanupCounter = 0;
+            for (auto it = m_ConnectionCount.begin(); it != m_ConnectionCount.end(); ) {
+                if (now - it->second.windowStart >= banWindow) {
+                    it = m_ConnectionCount.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
 
         auto it = m_ConnectionCount.find(ip);
         if (it == m_ConnectionCount.end()) {
@@ -196,10 +233,10 @@ void IOCPServer::RecordConnection(const std::string& ip)
             m_ConnectionCount[ip] = { 1, now };
         } else {
             // 检查是否在同一个统计窗口内
-            if (now - it->second.windowStart < IP_BAN_WINDOW_SECONDS) {
+            if (now - it->second.windowStart < banWindow) {
                 it->second.count++;
                 // 检查是否超过阈值
-                if (it->second.count > IP_BAN_MAX_CONNECTIONS) {
+                if (it->second.count > GetBanMaxConnections()) {
                     shouldBan = true;
                 }
             } else {
@@ -210,7 +247,7 @@ void IOCPServer::RecordConnection(const std::string& ip)
         }
     }
     if (shouldBan) {
-        BanIP(ip, IP_BAN_DURATION_SECONDS);
+        BanIP(ip, GetBanDurationSeconds());
     }
 }
 

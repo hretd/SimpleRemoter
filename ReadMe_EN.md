@@ -97,6 +97,21 @@
 
 **By continuing to use this software, you acknowledge that you have read, understood, and agreed to all the above terms.**
 
+> [!IMPORTANT]
+> **Network Connection & Privacy Notice**
+>
+> The master program (server) communicates with the authorization server based on license status:
+>
+> | License Type | Connection Behavior |
+> |--------------|---------------------|
+> | Trial Version | Maintains persistent connection to authorization server |
+> | V1/V2 Licensed | Connects at startup for verification, disconnects after |
+> | V2 Offline License | No connection to authorization server required |
+>
+> Unless offline authorization is obtained, the master program will exchange necessary data with the authorization server (e.g., detecting cracking attempts, validating license status).
+>
+> **By using this software, you accept the data transmission between the master program and the authorization server. If you do not agree, please do not use this software.**
+
 ---
 
 ## Features

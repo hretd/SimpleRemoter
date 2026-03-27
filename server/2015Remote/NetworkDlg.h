@@ -27,6 +27,13 @@ protected:
     CListBox m_ListBlacklist;
     CEdit m_EditIP;
 
+    // 阈值设置
+    UINT m_nDllLimitSeconds;
+    UINT m_nDllLimitCount;
+    UINT m_nBanWindow;
+    UINT m_nBanMaxConn;
+    UINT m_nBanDuration;
+
     // 消息处理
     afx_msg void OnBnClickedAddWhitelist();
     afx_msg void OnBnClickedDelWhitelist();
@@ -37,6 +44,8 @@ protected:
 private:
     void LoadLists();
     void SaveLists();
+    void LoadThresholds();
+    void SaveThresholds();
     bool IsValidIP(const CString& ip);
     CString GetInputIP();
 };

@@ -74,6 +74,7 @@
     <ClCompile Include="NotifyManager.cpp" />
     <ClCompile Include="NotifySettingsDlg.cpp" />
     <ClCompile Include="NetworkDlg.cpp" />
+    <ClCompile Include="IPHistoryDlg.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\client\Audio.h" />
@@ -166,6 +167,7 @@
     <ClInclude Include="TerminalModuleLoader.h" />
     <ClInclude Include="..\..\common\SafeString.h" />
     <ClInclude Include="NetworkDlg.h" />
+    <ClInclude Include="IPHistoryDlg.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="2015Remote.rc" />
