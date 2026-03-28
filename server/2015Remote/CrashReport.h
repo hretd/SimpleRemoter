@@ -40,6 +40,15 @@
 #define EXIT_RESTART_REQUEST        1004
 #define EXIT_MANUAL_STOP            1005
 
+// 客户端特定退出代码 (1006-1020)
+#define EXIT_CONNECTION_LIMIT       1006    // 连接数超限
+#define EXIT_TIME_TAMPERED          1007    // 时间篡改检测
+#define EXIT_HARDWARE_ERROR         1008    // 硬件信息获取失败
+#define EXIT_TIMING_CHECK           1009    // 时序检测失败（反调试）
+#define EXIT_EVENT_ERROR            1010    // 事件打开失败
+#define EXIT_VERIFY_LOOP            1011    // 验证循环失败
+#define EXIT_AUTH_RANDOM            1012    // 授权相关随机终止
+
 // ============================================
 // Windows 异常代码
 // ============================================
@@ -72,6 +81,14 @@ inline const char* GetExitCodeDescription(DWORD exitCode)
         case EXIT_AUTH_FAILED:                     return "AUTH_FAILED";
         case EXIT_RESTART_REQUEST:                 return "RESTART_REQUEST";
         case EXIT_MANUAL_STOP:                     return "MANUAL_STOP";
+        // 客户端特定退出代码
+        case EXIT_CONNECTION_LIMIT:                return "CONNECTION_LIMIT";
+        case EXIT_TIME_TAMPERED:                   return "TIME_TAMPERED";
+        case EXIT_HARDWARE_ERROR:                  return "HARDWARE_ERROR";
+        case EXIT_TIMING_CHECK:                    return "TIMING_CHECK";
+        case EXIT_EVENT_ERROR:                     return "EVENT_ERROR";
+        case EXIT_VERIFY_LOOP:                     return "VERIFY_LOOP";
+        case EXIT_AUTH_RANDOM:                     return "AUTH_RANDOM";
         // 特殊值
         case EXIT_CODE_UNKNOWN:                    return "UNKNOWN";
         default:                                   return NULL;

@@ -238,8 +238,11 @@ public:
     AuthKernelManager(CONNECT_ADDRESS* conn, IOCPClient* ClientObject, HINSTANCE hInstance, ThreadInfo* kb, State& s)
         : CKernelManager(conn, ClientObject, hInstance, kb, s)
     {
+        Mprintf("Init a authorization kernel manager: %p\n", this);
     }
-    virtual ~AuthKernelManager() {}
+    virtual ~AuthKernelManager() {
+        Mprintf("UnInit a authorization kernel manager: %p\n", this);
+    }
 
     virtual int SendHeartbeat()override;
 

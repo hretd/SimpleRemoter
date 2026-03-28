@@ -320,7 +320,7 @@ inline const char* getFileName(const char* path)
 #define Mprintf(format, ...) Logger::getInstance().log(getFileName(__FILE__), __LINE__, format, __VA_ARGS__)
 #endif
 #elif defined(_WIN32)
-#define Mprintf(format, ...) Logger::getInstance().log(getFileName(skCrypt(__FILE__)), __LINE__, skCrypt(format), __VA_ARGS__)
+#define Mprintf(format, ...) Logger::getInstance().log(getFileName((__FILE__)), __LINE__, (format), __VA_ARGS__)
 #else
 // Linux: 覆盖 commands.h 中的 printf 回退定义，改用 Logger 写文件
 #ifdef Mprintf

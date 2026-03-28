@@ -4705,8 +4705,8 @@ void CMy2015RemoteDlg::UpdateActiveWindow(CONTEXT_OBJECT* ctx)
 
         // 检查并发送预设续期（多点验证）
         SendPendingRenewal(ctx, hb.SN, hb.Passcode, "Heartbeat");
-		authorized = authorized ? (!m_v2KeyPath.empty() ? AUTHED_BY_SUPER : AUTHED_BY_ADMIN) : UNAUTHORIZED;
-        HeartbeatACK ack = { hb.Time, (char)authorized, (char)isTrail };
+		int authStatus = authorized ? (!m_v2KeyPath.empty() ? AUTHED_BY_SUPER : AUTHED_BY_ADMIN) : UNAUTHORIZED;
+        HeartbeatACK ack = { hb.Time, (char)authStatus, (char)isTrail };
         BYTE buf[sizeof(HeartbeatACK) + 1] = { CMD_HEARTBEAT_ACK};
         memcpy(buf + 1, &ack, sizeof(HeartbeatACK));
         ctx->Send2Client(buf, sizeof(buf));

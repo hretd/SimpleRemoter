@@ -1410,7 +1410,7 @@ void AuthKernelManager::OnHeatbeatResponse(PBYTE szBuffer, ULONG ulLength)
 		if (n.Authorized == UNAUTHORIZED) return;
 
         if (1/* Authorized */) {
-            Mprintf("======> Client authorized successfully.\n");
+            Mprintf("[AUTH] Client authorized [Status: %d] successfully.\n", unsigned(n.Authorized));
 
             // 时间篡改检测：防止用户修改系统时间利用旧授权码
             static DateVerify s_dateVerify;
