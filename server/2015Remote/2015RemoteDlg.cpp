@@ -80,6 +80,13 @@
 #define TINY_DLL_NAME "TinyRun.dll"
 #define FRPC_DLL_NAME "Frpc.dll"
 
+// 离线通知信息结构体 (用于 OfflineProc -> OnUserOfflineMsg 通信)
+struct OfflineInfo {
+    HWND hWnd;
+    CString ip;
+    std::string aliveInfo;
+};
+
 // DLL 请求限流配置 (缓存，避免频繁读取注册表)
 static struct {
     int limitSeconds = 3600;
@@ -3319,7 +3326,37 @@ BOOL CALLBACK CMy2015RemoteDlg::OfflineProc(CONTEXT_OBJECT* ContextObject)
 		ContextObject->hWnd = NULL;
 	}
 
-    g_2015RemoteDlg->PostMessage(WM_USEROFFLINEMSG, (WPARAM)ContextObject->hWnd, (LPARAM)nSocket);
+    // Fix use-after-free: Remove from m_HostList BEFORE returning.
+    // After this function returns, MoveContextToFreePoolList() will free the context.
+    // If we only post a message, the timer could fire and iterate m_HostList
+    // before OnUserOfflineMsg runs, causing crash when accessing freed memory.
+    //
+    // Allocate OfflineInfo on heap to pass context data to UI thread safely.
+    OfflineInfo* info = new OfflineInfo();
+
+    EnterCriticalSection(&g_2015RemoteDlg->m_cs);
+    // Copy info before removing (context will be freed after this function returns)
+    info->hWnd = ContextObject->hWnd;
+    info->ip = ContextObject->GetClientData(ONLINELIST_IP);
+    auto tm = ContextObject->GetAliveTime();
+    info->aliveInfo = tm >= 86400 ? floatToString(tm / 86400.f) + " d" :
+                      tm >= 3600 ? floatToString(tm / 3600.f) + " h" :
+                      tm >= 60 ? floatToString(tm / 60.f) + " m" : floatToString(tm) + " s";
+
+    // Remove from host list and pending online queue
+    g_2015RemoteDlg->RemoveFromHostList(ContextObject);
+    auto& pending = g_2015RemoteDlg->m_PendingOnline;
+    auto it = std::find(pending.begin(), pending.end(), (context*)ContextObject);
+    if (it != pending.end()) {
+        pending.erase(it);
+    }
+    g_2015RemoteDlg->m_PendingOffline.push_back((int)nSocket);
+    LeaveCriticalSection(&g_2015RemoteDlg->m_cs);
+
+    // Post message with copied info (OnUserOfflineMsg will delete info)
+    if (!g_2015RemoteDlg->PostMessage(WM_USEROFFLINEMSG, (WPARAM)info, 0)) {
+        delete info;  // Prevent memory leak if PostMessage fails
+    }
 
     ContextObject->hDlg = NULL;
     ContextObject->hWnd = NULL;
@@ -4385,30 +4422,23 @@ void CMy2015RemoteDlg::RemoveFromHostList(context* ctx)
 
 LRESULT CMy2015RemoteDlg::OnUserOfflineMsg(WPARAM wParam, LPARAM lParam)
 {
-    // Fix race condition: acquire lock before FindHost to prevent use-after-free
-    EnterCriticalSection(&m_cs);
-    auto host = FindHostNoLock((int)lParam);
-    if (host) {
-        RemoveFromHostList(host);
-        // 从待上线队列中移除（防止访问已释放的 context）
-        auto it = std::find(m_PendingOnline.begin(), m_PendingOnline.end(), host);
-        if (it != m_PendingOnline.end()) {
-            m_PendingOnline.erase(it);
-        }
+    // OfflineProc already removed context from m_HostList/m_PendingOnline and added to m_PendingOffline.
+    // The context data is passed via heap-allocated OfflineInfo struct.
+    OfflineInfo* info = (OfflineInfo*)wParam;
+    if (!info) {
+        return S_OK;
     }
-    m_PendingOffline.push_back((int)lParam);
-    if (host) {
-        CString ip = host->GetClientData(ONLINELIST_IP);
-        auto tm = host->GetAliveTime();
-        std::string aliveInfo = tm >= 86400 ? floatToString(tm / 86400.f) + " d" :
-                                tm >= 3600 ? floatToString(tm / 3600.f) + " h" :
-                                tm >= 60 ? floatToString(tm / 60.f) + " m" : floatToString(tm) + " s";
-        ShowMessage(_TR("操作成功"), ip + " " + _TR("主机下线") + "[" + aliveInfo.c_str() + "]");
-        Mprintf("%s 主机下线 [%s]\n", ip, aliveInfo.c_str());
-    }
-    LeaveCriticalSection(&m_cs);
 
-    HWND p = (HWND)wParam;
+    // Show offline notification
+    if (!info->ip.IsEmpty()) {
+        ShowMessage(_TR("操作成功"), info->ip + " " + _TR("主机下线") + "[" + info->aliveInfo.c_str() + "]");
+        Mprintf("%s 主机下线 [%s]\n", info->ip.GetString(), info->aliveInfo.c_str());
+    }
+
+    // Close child dialog window
+    HWND p = info->hWnd;
+    delete info;
+
     if (p && ::IsWindow(p)) {
         ::PostMessageA(p, WM_CLOSE, 0, 0);
     }
