@@ -891,11 +891,44 @@
 #define ID_TOOL_IMPORT_LICENSE          33038
 #define ID_EXIT_FULLSCREEN              40001
 
+// Menu icon bitmaps - context menu
+#define IDB_BITMAP_SHUTDOWN             339
+#define IDB_BITMAP_REBOOT               340
+#define IDB_BITMAP_LOGOUT               341
+#define IDB_BITMAP_PORTPROXY_STD        342
+// Menu icon bitmaps - tray menu
+#define IDB_BITMAP_SHOW                 343
+#define IDB_BITMAP_EXIT                 344
+// Menu icon bitmaps - main menu
+#define IDB_BITMAP_SETTINGS             345
+#define IDB_BITMAP_WALLET               346
+#define IDB_BITMAP_NETWORK              347
+#define IDB_BITMAP_INPUTPASSWORD        348
+#define IDB_BITMAP_IMPORTLICENSE        349
+#define IDB_BITMAP_PEEDIT               350
+#define IDB_BITMAP_AUTHGEN              351
+#define IDB_BITMAP_GENMASTER            352
+#define IDB_BITMAP_LICENSEMGR           353
+#define IDB_BITMAP_KEYBOARD             354
+#define IDB_BITMAP_NOTIFY_MENU          355
+#define IDB_BITMAP_LOG                  356
+#define IDB_BITMAP_HISTORY              357
+#define IDB_BITMAP_BACKUP               358
+#define IDB_BITMAP_IMPORT               359
+#define IDB_BITMAP_LANGUAGE             360
+#define IDB_BITMAP_REFRESH              361
+#define IDB_BITMAP_PLUGIN               362
+#define IDB_BITMAP_FRP                  363
+#define IDB_BITMAP_HELP                 364
+#define IDB_BITMAP_FEEDBACK             365
+#define IDB_BITMAP_TRIAL                366
+#define IDB_BITMAP_REQUESTAUTH          367
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        339
+#define _APS_NEXT_RESOURCE_VALUE        368
 #define _APS_NEXT_COMMAND_VALUE         33040
 #define _APS_NEXT_CONTROL_VALUE         2515
 #define _APS_NEXT_SYMED_VALUE           105

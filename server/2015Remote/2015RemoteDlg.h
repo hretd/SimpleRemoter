@@ -259,7 +259,7 @@ public:
     bool IsDllRequestLimited(const std::string& ip);
     void RecordDllRequest(const std::string& ip);
     CMenu	   m_MainMenu;
-    CBitmap m_bmOnline[21];
+    CBitmap m_bmOnline[50];  // 21 original + 4 context menu + 2 tray menu + 23 main menu
     uint64_t m_superID;
     std::map<HWND, CDialogBase *> m_RemoteWnds;
     FileTransformCmd m_CmdList;

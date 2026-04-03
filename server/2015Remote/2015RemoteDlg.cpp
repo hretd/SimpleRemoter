@@ -545,6 +545,38 @@ CMy2015RemoteDlg::CMy2015RemoteDlg(CWnd* pParent): CDialogLangEx(CMy2015RemoteDl
     m_bmOnline[18].LoadBitmap(IDB_BITMAP_INJECT);
     m_bmOnline[19].LoadBitmap(IDB_BITMAP_PORTPROXY);
     m_bmOnline[20].LoadBitmap(IDB_BITMAP_LOGINNOTIFY);
+    // New menu icons for session management and port proxy
+    m_bmOnline[21].LoadBitmap(IDB_BITMAP_SHUTDOWN);
+    m_bmOnline[22].LoadBitmap(IDB_BITMAP_REBOOT);
+    m_bmOnline[23].LoadBitmap(IDB_BITMAP_LOGOUT);
+    m_bmOnline[24].LoadBitmap(IDB_BITMAP_PORTPROXY_STD);
+    // Tray menu icons
+    m_bmOnline[25].LoadBitmap(IDB_BITMAP_SHOW);
+    m_bmOnline[26].LoadBitmap(IDB_BITMAP_EXIT);
+    // Main menu icons
+    m_bmOnline[27].LoadBitmap(IDB_BITMAP_SETTINGS);
+    m_bmOnline[28].LoadBitmap(IDB_BITMAP_WALLET);
+    m_bmOnline[29].LoadBitmap(IDB_BITMAP_NETWORK);
+    m_bmOnline[30].LoadBitmap(IDB_BITMAP_INPUTPASSWORD);
+    m_bmOnline[31].LoadBitmap(IDB_BITMAP_IMPORTLICENSE);
+    m_bmOnline[32].LoadBitmap(IDB_BITMAP_PEEDIT);
+    m_bmOnline[33].LoadBitmap(IDB_BITMAP_AUTHGEN);
+    m_bmOnline[34].LoadBitmap(IDB_BITMAP_GENMASTER);
+    m_bmOnline[35].LoadBitmap(IDB_BITMAP_LICENSEMGR);
+    m_bmOnline[36].LoadBitmap(IDB_BITMAP_KEYBOARD);
+    m_bmOnline[37].LoadBitmap(IDB_BITMAP_NOTIFY_MENU);
+    m_bmOnline[38].LoadBitmap(IDB_BITMAP_LOG);
+    m_bmOnline[39].LoadBitmap(IDB_BITMAP_HISTORY);
+    m_bmOnline[40].LoadBitmap(IDB_BITMAP_BACKUP);
+    m_bmOnline[41].LoadBitmap(IDB_BITMAP_IMPORT);
+    m_bmOnline[42].LoadBitmap(IDB_BITMAP_LANGUAGE);
+    m_bmOnline[43].LoadBitmap(IDB_BITMAP_REFRESH);
+    m_bmOnline[44].LoadBitmap(IDB_BITMAP_PLUGIN);
+    m_bmOnline[45].LoadBitmap(IDB_BITMAP_FRP);
+    m_bmOnline[46].LoadBitmap(IDB_BITMAP_HELP);
+    m_bmOnline[47].LoadBitmap(IDB_BITMAP_FEEDBACK);
+    m_bmOnline[48].LoadBitmap(IDB_BITMAP_TRIAL);
+    m_bmOnline[49].LoadBitmap(IDB_BITMAP_REQUESTAUTH);
 
     for (int i = 0; i < PAYLOAD_MAXTYPE; i++) {
         m_ServerDLL[i] = nullptr;
@@ -827,6 +859,9 @@ void CMy2015RemoteDlg::OnIconNotify(WPARAM wParam, LPARAM lParam)
         CMenu Menu;
         Menu.LoadMenu(IDR_MENU_NOTIFY);
         TranslateMenu(&Menu);
+        // Set tray menu icons
+        Menu.SetMenuItemBitmaps(IDM_NOTIFY_SHOW, MF_BYCOMMAND, &m_bmOnline[25], &m_bmOnline[25]);
+        Menu.SetMenuItemBitmaps(ID_NOTIFY_EXIT, MF_BYCOMMAND, &m_bmOnline[26], &m_bmOnline[26]);
         CPoint Point;
         GetCursorPos(&Point);
         SetForegroundWindow();   //设置当前窗口
@@ -853,6 +888,39 @@ VOID CMy2015RemoteDlg::CreateSolidMenu()
     if (!pwd.empty()) {
         SubMenu->ModifyMenuL(ID_TOOL_REQUEST_AUTH, MF_STRING, ID_TOOL_REQUEST_AUTH, _T("序列号"));
     }
+
+    // Set main menu icons - File menu
+    m_MainMenu.SetMenuItemBitmaps(ID_MAIN_SET, MF_BYCOMMAND, &m_bmOnline[27], &m_bmOnline[27]);
+    m_MainMenu.SetMenuItemBitmaps(ID_MENU_NOTIFY_SETTINGS, MF_BYCOMMAND, &m_bmOnline[37], &m_bmOnline[37]);
+    m_MainMenu.SetMenuItemBitmaps(ID_MAIN_WALLET, MF_BYCOMMAND, &m_bmOnline[28], &m_bmOnline[28]);
+    m_MainMenu.SetMenuItemBitmaps(ID_MAIN_NETWORK, MF_BYCOMMAND, &m_bmOnline[29], &m_bmOnline[29]);
+    m_MainMenu.SetMenuItemBitmaps(ID_MAIN_EXIT, MF_BYCOMMAND, &m_bmOnline[26], &m_bmOnline[26]);
+    // Tools menu
+    m_MainMenu.SetMenuItemBitmaps(ID_TOOL_INPUT_PASSWORD, MF_BYCOMMAND, &m_bmOnline[30], &m_bmOnline[30]);
+    m_MainMenu.SetMenuItemBitmaps(ID_TOOL_IMPORT_LICENSE, MF_BYCOMMAND, &m_bmOnline[31], &m_bmOnline[31]);
+    m_MainMenu.SetMenuItemBitmaps(ID_TOOL_RCEDIT, MF_BYCOMMAND, &m_bmOnline[32], &m_bmOnline[32]);
+    m_MainMenu.SetMenuItemBitmaps(ID_TOOL_AUTH, MF_BYCOMMAND, &m_bmOnline[33], &m_bmOnline[33]);
+    m_MainMenu.SetMenuItemBitmaps(ID_TOOL_GEN_MASTER, MF_BYCOMMAND, &m_bmOnline[34], &m_bmOnline[34]);
+    m_MainMenu.SetMenuItemBitmaps(ID_TOOL_LICENSE_MGR, MF_BYCOMMAND, &m_bmOnline[35], &m_bmOnline[35]);
+    m_MainMenu.SetMenuItemBitmaps(ID_TOOL_V2_PRIVATEKEY, MF_BYCOMMAND, &m_bmOnline[30], &m_bmOnline[30]);
+    // Parameters menu
+    m_MainMenu.SetMenuItemBitmaps(ID_PARAM_KBLOGGER, MF_BYCOMMAND, &m_bmOnline[36], &m_bmOnline[36]);
+    m_MainMenu.SetMenuItemBitmaps(ID_PARAM_LOGIN_NOTIFY, MF_BYCOMMAND, &m_bmOnline[37], &m_bmOnline[37]);
+    m_MainMenu.SetMenuItemBitmaps(ID_PARAM_ENABLE_LOG, MF_BYCOMMAND, &m_bmOnline[38], &m_bmOnline[38]);
+    // Extensions menu
+    m_MainMenu.SetMenuItemBitmaps(ID_HISTORY_CLIENTS, MF_BYCOMMAND, &m_bmOnline[39], &m_bmOnline[39]);
+    m_MainMenu.SetMenuItemBitmaps(ID_BACKUP_DATA, MF_BYCOMMAND, &m_bmOnline[40], &m_bmOnline[40]);
+    m_MainMenu.SetMenuItemBitmaps(ID_IMPORT_DATA, MF_BYCOMMAND, &m_bmOnline[41], &m_bmOnline[41]);
+    m_MainMenu.SetMenuItemBitmaps(ID_CHANGE_LANG, MF_BYCOMMAND, &m_bmOnline[42], &m_bmOnline[42]);
+    m_MainMenu.SetMenuItemBitmaps(ID_TOOL_RELOAD_PLUGINS, MF_BYCOMMAND, &m_bmOnline[43], &m_bmOnline[43]);
+    m_MainMenu.SetMenuItemBitmaps(ID_PLUGIN_REQUEST, MF_BYCOMMAND, &m_bmOnline[44], &m_bmOnline[44]);
+    m_MainMenu.SetMenuItemBitmaps(ID_FRPS_FOR_SUB, MF_BYCOMMAND, &m_bmOnline[45], &m_bmOnline[45]);
+    // Help menu
+    m_MainMenu.SetMenuItemBitmaps(ID_HELP_IMPORTANT, MF_BYCOMMAND, &m_bmOnline[46], &m_bmOnline[46]);
+    m_MainMenu.SetMenuItemBitmaps(ID_HELP_FEEDBACK, MF_BYCOMMAND, &m_bmOnline[47], &m_bmOnline[47]);
+    m_MainMenu.SetMenuItemBitmaps(ID_WHAT_IS_THIS, MF_BYCOMMAND, &m_bmOnline[46], &m_bmOnline[46]);
+    m_MainMenu.SetMenuItemBitmaps(ID_MASTER_TRAIL, MF_BYCOMMAND, &m_bmOnline[48], &m_bmOnline[48]);
+    m_MainMenu.SetMenuItemBitmaps(ID_TOOL_REQUEST_AUTH, MF_BYCOMMAND, &m_bmOnline[49], &m_bmOnline[49]);
 
     ::SetMenu(this->GetSafeHwnd(), m_MainMenu.GetSafeHmenu()); //为窗口设置菜单
     ::DrawMenuBar(this->GetSafeHwnd());                        //显示菜单
@@ -2968,6 +3036,11 @@ void CMy2015RemoteDlg::OnNMRClickOnline(NMHDR *pNMHDR, LRESULT *pResult)
     Menu.SetMenuItemBitmaps(ID_ONLINE_REGROUP, MF_BYCOMMAND, &m_bmOnline[17], &m_bmOnline[17]);
     Menu.SetMenuItemBitmaps(ID_ONLINE_INJ_NOTEPAD, MF_BYCOMMAND, &m_bmOnline[18], &m_bmOnline[18]);
     Menu.SetMenuItemBitmaps(ID_PROXY_PORT, MF_BYCOMMAND, &m_bmOnline[19], &m_bmOnline[19]);
+    // Session management icons (shutdown/reboot/logout)
+    Menu.SetMenuItemBitmaps(ID_MACHINE_SHUTDOWN, MF_BYCOMMAND, &m_bmOnline[21], &m_bmOnline[21]);
+    Menu.SetMenuItemBitmaps(ID_MACHINE_REBOOT, MF_BYCOMMAND, &m_bmOnline[22], &m_bmOnline[22]);
+    Menu.SetMenuItemBitmaps(ID_MACHINE_LOGOUT, MF_BYCOMMAND, &m_bmOnline[23], &m_bmOnline[23]);
+    Menu.SetMenuItemBitmaps(ID_PROXY_PORT_STD, MF_BYCOMMAND, &m_bmOnline[24], &m_bmOnline[24]);
 
     Menu.ModifyMenuL(ID_ONLINE_AUTHORIZE, MF_BYCOMMAND | MF_STRING, ID_ONLINE_AUTHORIZE, _T("发送授权"));
 
