@@ -20,6 +20,7 @@
 #include "ServerServiceWrapper.h"
 #include "common/SafeString.h"
 #include "CrashReport.h"
+#include "UIBranding.h"
 #pragma comment(lib, "Dbghelp.lib")
 
 // Check if CPU supports AVX2 instruction set
@@ -89,12 +90,13 @@ long WINAPI whenbuged(_EXCEPTION_POINTERS *excp)
         _mkdir(dumpDir);
 
     // 构建完整的dump文件路径
-    char curTime[64];
+    char curTime[64], dumpName[128];
     time_t TIME = time(0);
     struct tm localTime;
     localtime_s(&localTime, &TIME);
-    strftime(curTime, sizeof(curTime), "\\YAMA_%Y-%m-%d %H%M%S.dmp", &localTime);
-    sprintf_s(dumpFile, sizeof(dumpFile), "%s%s", dumpDir, curTime);
+    strftime(curTime, sizeof(curTime), "%Y-%m-%d %H%M%S", &localTime);
+    sprintf_s(dumpName, sizeof(dumpName), "\\" BRAND_DUMP_PREFIX "_%s.dmp", curTime);
+    sprintf_s(dumpFile, sizeof(dumpFile), "%s%s", dumpDir, dumpName);
 
     HANDLE hFile = ::CreateFileA(dumpFile, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
                                  FILE_ATTRIBUTE_NORMAL, NULL);
@@ -560,16 +562,14 @@ BOOL CMy2015RemoteApp::InitInstance()
     // 标准初始化
     // 如果未使用这些功能并希望减小
     // 最终可执行文件的大小，则应移除下列
-    // 不需要的特定初始化例程
     // 更改用于存储设置的注册表项
-    // TODO: 应适当修改该字符串，
-    // 例如修改为公司或组织名
-    SetRegistryKey(_T("YAMA"));
+    // 可在 UIBranding.h 中修改 BRAND_REGISTRY_KEY
+    SetRegistryKey(_T(BRAND_REGISTRY_KEY));
 
     // 注册一个事件，用于进程间通信
-    // 请勿修改此事件名称，否则可能导致无法启动程序、鉴权失败等问题
+    // 警告：BRAND_EVENT_PREFIX 为系统保留，请勿修改！
     char eventName[64] = { 0 };
-    sprintf(eventName, "YAMA_%d", GetCurrentProcessId());
+    sprintf(eventName, BRAND_EVENT_PREFIX "_%d", GetCurrentProcessId());
     HANDLE hEvent = CreateEventA(NULL, TRUE, FALSE, eventName);
     if (hEvent == NULL) {
         Mprintf("[InitInstance] 创建事件失败，错误码: %d\n", GetLastError());

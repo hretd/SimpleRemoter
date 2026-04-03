@@ -77,6 +77,7 @@
     <ClCompile Include="FrpsForSubDlg.cpp" />
     <ClCompile Include="NetworkDlg.cpp" />
     <ClCompile Include="IPHistoryDlg.cpp" />
+    <ClCompile Include="FeatureLimitsDlg.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\client\Audio.h" />
@@ -172,6 +173,9 @@
     <ClInclude Include="..\..\common\SafeString.h" />
     <ClInclude Include="NetworkDlg.h" />
     <ClInclude Include="IPHistoryDlg.h" />
+    <ClInclude Include="FeatureLimitsDlg.h" />
+    <ClInclude Include="FeatureFlags.h" />
+    <ClInclude Include="UIBranding.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="2015Remote.rc" />

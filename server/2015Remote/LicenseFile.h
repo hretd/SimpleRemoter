@@ -1,12 +1,13 @@
 ﻿#pragma once
 
 #include <string>
+#include "UIBranding.h"
 
 // License file format version
 const int LICENSE_FILE_VERSION = 1;
 
-// Magic constant
-const char* const LICENSE_MAGIC = "YAMA";
+// Magic constant (警告：BRAND_LICENSE_MAGIC 为系统保留，请勿修改！)
+const char* const LICENSE_MAGIC = BRAND_LICENSE_MAGIC;
 
 // License file data structure
 struct LicenseFileData {

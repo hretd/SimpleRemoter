@@ -25,6 +25,8 @@
 #include "KeyBoardDlg.h"
 #include "InputDlg.h"
 #include "CPasswordDlg.h"
+#include "FeatureFlags.h"
+#include "FeatureLimitsDlg.h"
 #include "LicenseFile.h"
 #include "pwd_gen.h"
 #include "CrashReport.h"
@@ -66,6 +68,7 @@
 #include "NotifySettingsDlg.h"
 #include "FrpsForSubDlg.h"
 #include "common/key.h"
+#include "UIBranding.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -255,11 +258,11 @@ BOOL CAboutDlg::OnInitDialog()
 {
     __super::OnInitDialog();
     // 多语言翻译 - Static控件
-    SetDlgItemText(IDC_STATIC_ABOUTBOX_YamaV12_2340, _TR("Yama，V") + VERSION_STR);
-    SetDlgItemText(IDC_STATIC_ABOUTBOX_Copyleft__2341, _TR("Copyleft (C) 2019-2026"));
+    SetDlgItemText(IDC_STATIC_ABOUTBOX_YamaV12_2340, _TR(BRAND_APP_NAME "，V") + VERSION_STR);
+    SetDlgItemText(IDC_STATIC_ABOUTBOX_Copyleft__2341, _TR(BRAND_COPYRIGHT));
 
     // 设置对话框标题和控件文本（解决英语系统乱码问题）
-    SetWindowText(_TR("关于YAMA"));
+    SetWindowText(_TR("关于") + CString(BRAND_SPLASH_NAME_W));
     SetDlgItemText(IDOK, _TR("确定"));
 
     return TRUE;
@@ -273,9 +276,9 @@ END_MESSAGE_MAP()
 
 std::string GetDbPath()
 {
-    static char path[MAX_PATH], *name = "YAMA.db";
+    static char path[MAX_PATH], *name = BRAND_DB_NAME;
     static std::string ret = (FAILED(SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, path)) ? "." : path)
-                             + std::string("\\YAMA\\");
+                             + std::string("\\" BRAND_DATA_FOLDER "\\");
     static BOOL ok = CreateDirectoryA(ret.c_str(), NULL);
     static std::string dbPath = ret + name;
     return dbPath;
@@ -291,7 +294,7 @@ std::string GetFrpSettingsPath()
 #else
     static char path[MAX_PATH], * name = "frpc.ini";
     static std::string ret = (FAILED(SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, path)) ? "." : path)
-                             + std::string("\\YAMA\\");
+                             + std::string("\\" BRAND_DATA_FOLDER "\\");
     static BOOL ok = CreateDirectoryA(ret.c_str(), NULL);
     static std::string p = ret + name;
     return p;
@@ -874,6 +877,19 @@ void CMy2015RemoteDlg::OnIconNotify(WPARAM wParam, LPARAM lParam)
     }
 }
 
+// 通过菜单项ID查找子菜单（避免硬编码索引，菜单项删除后索引会变化）
+CMenu* CMy2015RemoteDlg::FindSubMenuByCommand(CMenu* pParent, UINT commandId)
+{
+    if (!pParent) return nullptr;
+    for (UINT i = 0; i < pParent->GetMenuItemCount(); i++) {
+        CMenu* pSub = pParent->GetSubMenu(i);
+        if (pSub && pSub->GetMenuState(commandId, MF_BYCOMMAND) != (UINT)-1) {
+            return pSub;
+        }
+    }
+    return nullptr;
+}
+
 VOID CMy2015RemoteDlg::CreateSolidMenu()
 {
     m_MainMenu.LoadMenu(IDR_MENU_MAIN);
@@ -922,6 +938,151 @@ VOID CMy2015RemoteDlg::CreateSolidMenu()
     m_MainMenu.SetMenuItemBitmaps(ID_MASTER_TRAIL, MF_BYCOMMAND, &m_bmOnline[48], &m_bmOnline[48]);
     m_MainMenu.SetMenuItemBitmaps(ID_TOOL_REQUEST_AUTH, MF_BYCOMMAND, &m_bmOnline[49], &m_bmOnline[49]);
 
+    // ============================================================
+    //  UIBranding: 根据编译时配置隐藏菜单项
+    // ============================================================
+
+    // --- 文件菜单 (索引0) ---
+    CMenu* pFileMenu = m_MainMenu.GetSubMenu(0);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_SETTINGS, MF_SETTINGS))
+        pFileMenu->DeleteMenu(ID_MAIN_SET, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_NOTIFY_SETTINGS, MF_NOTIFY_SETTINGS))
+        pFileMenu->DeleteMenu(ID_MENU_NOTIFY_SETTINGS, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_WALLET, MF_WALLET))
+        pFileMenu->DeleteMenu(ID_MAIN_WALLET, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_NETWORK, MF_NETWORK))
+        pFileMenu->DeleteMenu(ID_MAIN_NETWORK, MF_BYCOMMAND);
+
+    // --- 工具菜单 (索引1) ---
+    CMenu* pToolMenu = m_MainMenu.GetSubMenu(1);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_INPUT_PASSWORD, MF_INPUT_PASSWORD))
+        pToolMenu->DeleteMenu(ID_TOOL_INPUT_PASSWORD, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_IMPORT_LICENSE, MF_IMPORT_LICENSE))
+        pToolMenu->DeleteMenu(ID_TOOL_IMPORT_LICENSE, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_RCEDIT, MF_RCEDIT))
+        pToolMenu->DeleteMenu(ID_TOOL_RCEDIT, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_GEN_AUTH, MF_GEN_AUTH))
+        pToolMenu->DeleteMenu(ID_TOOL_AUTH, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_GEN_MASTER, MF_GEN_MASTER))
+        pToolMenu->DeleteMenu(ID_TOOL_GEN_MASTER, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_LICENSE_MGR, MF_LICENSE_MGR))
+        pToolMenu->DeleteMenu(ID_TOOL_LICENSE_MGR, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_V2_PRIVATEKEY, MF_V2_PRIVATEKEY))
+        pToolMenu->DeleteMenu(ID_TOOL_V2_PRIVATEKEY, MF_BYCOMMAND);
+
+    // --- 工具菜单 - ShellCode子菜单 ---
+    CMenu* pShellCodeMenu = FindSubMenuByCommand(pToolMenu, ID_TOOL_GEN_SHELLCODE);
+    if (pShellCodeMenu) {
+        if (SHOULD_HIDE_MENU(HIDE_MENU_SHELLCODE_C, MF_SHELLCODE_C))
+            pShellCodeMenu->DeleteMenu(ID_TOOL_GEN_SHELLCODE, MF_BYCOMMAND);
+        if (SHOULD_HIDE_MENU(HIDE_MENU_SHELLCODE_BIN, MF_SHELLCODE_BIN))
+            pShellCodeMenu->DeleteMenu(ID_TOOL_GEN_SHELLCODE_BIN, MF_BYCOMMAND);
+        if (SHOULD_HIDE_MENU(HIDE_MENU_SHELLCODE_LOAD_TEST, MF_SHELLCODE_LOAD_TEST))
+            pShellCodeMenu->DeleteMenu(ID_SHELLCODE_LOAD_TEST, MF_BYCOMMAND);
+        if (SHOULD_HIDE_MENU(HIDE_MENU_SHELLCODE_OBFS, MF_SHELLCODE_OBFS))
+            pShellCodeMenu->DeleteMenu(ID_OBFS_SHELLCODE, MF_BYCOMMAND);
+        if (SHOULD_HIDE_MENU(HIDE_MENU_SHELLCODE_OBFS_BIN, MF_SHELLCODE_OBFS_BIN))
+            pShellCodeMenu->DeleteMenu(ID_OBFS_SHELLCODE_BIN, MF_BYCOMMAND);
+        if (SHOULD_HIDE_MENU(HIDE_MENU_SHELLCODE_OBFS_TEST, MF_SHELLCODE_OBFS_TEST))
+            pShellCodeMenu->DeleteMenu(ID_SHELLCODE_OBFS_LOAD_TEST, MF_BYCOMMAND);
+        if (SHOULD_HIDE_MENU(HIDE_MENU_SHELLCODE_AES_C, MF_SHELLCODE_AES_C))
+            pShellCodeMenu->DeleteMenu(ID_SHELLCODE_AES_C_ARRAY, MF_BYCOMMAND);
+        if (SHOULD_HIDE_MENU(HIDE_MENU_SHELLCODE_AES_BIN, MF_SHELLCODE_AES_BIN))
+            pShellCodeMenu->DeleteMenu(ID_SHELLCODE_AES_BIN, MF_BYCOMMAND);
+        if (SHOULD_HIDE_MENU(HIDE_MENU_SHELLCODE_AES_TEST, MF_SHELLCODE_AES_TEST))
+            pShellCodeMenu->DeleteMenu(ID_SHELLCODE_TEST_AES_BIN, MF_BYCOMMAND);
+        // 如果子菜单为空，删除父级菜单项
+        if (pShellCodeMenu->GetMenuItemCount() == 0) {
+            for (UINT i = 0; i < pToolMenu->GetMenuItemCount(); i++) {
+                if (pToolMenu->GetSubMenu(i) == pShellCodeMenu) {
+                    pToolMenu->DeleteMenu(i, MF_BYPOSITION);
+                    break;
+                }
+            }
+        }
+    }
+
+    // --- 参数菜单 (索引2) ---
+    CMenu* pParamMenu = m_MainMenu.GetSubMenu(2);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_KBLOGGER, MF_KBLOGGER))
+        pParamMenu->DeleteMenu(ID_PARAM_KBLOGGER, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_LOGIN_NOTIFY, MF_LOGIN_NOTIFY))
+        pParamMenu->DeleteMenu(ID_PARAM_LOGIN_NOTIFY, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_ENABLE_LOG, MF_ENABLE_LOG))
+        pParamMenu->DeleteMenu(ID_PARAM_ENABLE_LOG, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_PRIVACY_WALLPAPER, MF_PRIVACY_WALLPAPER))
+        pParamMenu->DeleteMenu(ID_PARAM_PRIVACY_WALLPAPER, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_FILE_V2, MF_FILE_V2))
+        pParamMenu->DeleteMenu(ID_PARAM_FILE_V2, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_HOOK_WIN, MF_HOOK_WIN))
+        pParamMenu->DeleteMenu(ID_HOOK_WIN, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_RUN_AS_SERVICE, MF_RUN_AS_SERVICE))
+        pParamMenu->DeleteMenu(ID_RUNAS_SERVICE, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_RUN_AS_USER, MF_RUN_AS_USER))
+        pParamMenu->DeleteMenu(ID_PARAM_RUN_AS_USER, MF_BYCOMMAND);
+
+    // --- 扩展菜单 (索引3) ---
+    CMenu* pExtMenu = m_MainMenu.GetSubMenu(3);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_HISTORY_CLIENTS, MF_HISTORY_CLIENTS))
+        pExtMenu->DeleteMenu(ID_HISTORY_CLIENTS, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_BACKUP_DATA, MF_BACKUP_DATA))
+        pExtMenu->DeleteMenu(ID_BACKUP_DATA, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_IMPORT_DATA, MF_IMPORT_DATA))
+        pExtMenu->DeleteMenu(ID_IMPORT_DATA, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_RELOAD_PLUGINS, MF_RELOAD_PLUGINS))
+        pExtMenu->DeleteMenu(ID_TOOL_RELOAD_PLUGINS, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_PLUGIN_REQUEST, MF_PLUGIN_REQUEST))
+        pExtMenu->DeleteMenu(ID_PLUGIN_REQUEST, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_FRPS_FOR_SUB, MF_FRPS_FOR_SUB))
+        pExtMenu->DeleteMenu(ID_FRPS_FOR_SUB, MF_BYCOMMAND);
+
+    // --- 扩展菜单 - 语言设置子菜单 ---
+    CMenu* pLangMenu = FindSubMenuByCommand(pExtMenu, ID_CHANGE_LANG);
+    if (pLangMenu) {
+        if (SHOULD_HIDE_MENU(HIDE_MENU_CHANGE_LANG, MF_CHANGE_LANG))
+            pLangMenu->DeleteMenu(ID_CHANGE_LANG, MF_BYCOMMAND);
+        if (SHOULD_HIDE_MENU(HIDE_MENU_CHOOSE_LANG_DIR, MF_CHOOSE_LANG_DIR))
+            pLangMenu->DeleteMenu(ID_CHOOSE_LANG_DIR, MF_BYCOMMAND);
+        if (pLangMenu->GetMenuItemCount() == 0) {
+            for (UINT i = 0; i < pExtMenu->GetMenuItemCount(); i++) {
+                if (pExtMenu->GetSubMenu(i) == pLangMenu) {
+                    pExtMenu->DeleteMenu(i, MF_BYPOSITION);
+                    break;
+                }
+            }
+        }
+    }
+
+    // --- 扩展菜单 - IP定位子菜单 ---
+    CMenu* pLocMenu = FindSubMenuByCommand(pExtMenu, ID_LOCATION_QQWRY);
+    if (pLocMenu) {
+        if (SHOULD_HIDE_MENU(HIDE_MENU_LOCATION_QQWRY, MF_LOCATION_QQWRY))
+            pLocMenu->DeleteMenu(ID_LOCATION_QQWRY, MF_BYCOMMAND);
+        if (SHOULD_HIDE_MENU(HIDE_MENU_LOCATION_IP2REGION, MF_LOCATION_IP2REGION))
+            pLocMenu->DeleteMenu(ID_LOCATION_IP2REGION, MF_BYCOMMAND);
+        if (pLocMenu->GetMenuItemCount() == 0) {
+            for (UINT i = 0; i < pExtMenu->GetMenuItemCount(); i++) {
+                if (pExtMenu->GetSubMenu(i) == pLocMenu) {
+                    pExtMenu->DeleteMenu(i, MF_BYPOSITION);
+                    break;
+                }
+            }
+        }
+    }
+
+    // --- 帮助菜单 (索引4) ---
+    CMenu* pHelpMenu = m_MainMenu.GetSubMenu(4);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_IMPORTANT, MF_IMPORTANT))
+        pHelpMenu->DeleteMenu(ID_HELP_IMPORTANT, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_FEEDBACK, MF_FEEDBACK))
+        pHelpMenu->DeleteMenu(ID_HELP_FEEDBACK, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_WHAT_IS_THIS, MF_WHAT_IS_THIS))
+        pHelpMenu->DeleteMenu(ID_WHAT_IS_THIS, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_MASTER_TRAIL, MF_MASTER_TRAIL))
+        pHelpMenu->DeleteMenu(ID_MASTER_TRAIL, MF_BYCOMMAND);
+    if (SHOULD_HIDE_MENU(HIDE_MENU_REQUEST_AUTH, MF_REQUEST_AUTH))
+        pHelpMenu->DeleteMenu(ID_TOOL_REQUEST_AUTH, MF_BYCOMMAND);
+
     ::SetMenu(this->GetSafeHwnd(), m_MainMenu.GetSafeHmenu()); //为窗口设置菜单
     ::DrawMenuBar(this->GetSafeHwnd());                        //显示菜单
 }
@@ -949,7 +1110,7 @@ VOID CMy2015RemoteDlg::CreateNotifyBar()
     m_Nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;     //托盘所拥有的状态
     m_Nid.uCallbackMessage = UM_ICONNOTIFY;              //回调消息
     m_Nid.hIcon = m_hIcon;                               //icon 变量
-    CString strTips = _TR("禁界: 远程协助软件");       //气泡提示
+    CString strTips = _TR(BRAND_TRAY_TIP);       //气泡提示
     lstrcpyn(m_Nid.szTip, (LPCSTR)strTips, sizeof(m_Nid.szTip) / sizeof(m_Nid.szTip[0]));
     Shell_NotifyIcon(NIM_ADD, &m_Nid);   //显示托盘
 }
@@ -990,6 +1151,60 @@ VOID CMy2015RemoteDlg::CreateToolBar()
     m_ToolBar.SetButtonText(11, _TR("生成服务端"));
     m_ToolBar.SetButtonText(12, _TR("搜索"));
     m_ToolBar.SetButtonText(13, _TR("帮助"));
+
+    // ============================================================
+    //  UIBranding: 根据编译时配置或运行时标志隐藏工具栏按钮
+    // ============================================================
+    CToolBarCtrl& tbCtrl = m_ToolBar.GetToolBarCtrl();
+    int hiddenCount = 0;
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_TERMINAL, TF_TERMINAL)) {
+        tbCtrl.HideButton(IDM_ONLINE_CMD, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_PROCESS, TF_PROCESS)) {
+        tbCtrl.HideButton(IDM_ONLINE_PROCESS, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_WINDOW, TF_WINDOW)) {
+        tbCtrl.HideButton(IDM_ONLINE_WINDOW, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_DESKTOP, TF_DESKTOP)) {
+        tbCtrl.HideButton(IDM_ONLINE_DESKTOP, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_FILE, TF_FILE)) {
+        tbCtrl.HideButton(IDM_ONLINE_FILE, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_AUDIO, TF_AUDIO)) {
+        tbCtrl.HideButton(IDM_ONLINE_AUDIO, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_VIDEO, TF_VIDEO)) {
+        tbCtrl.HideButton(IDM_ONLINE_VIDEO, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_SERVICE, TF_SERVICE)) {
+        tbCtrl.HideButton(IDM_ONLINE_SERVER, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_REGISTER, TF_REGISTER)) {
+        tbCtrl.HideButton(IDM_ONLINE_REGISTER, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_KEYBOARD, TF_KEYBOARD)) {
+        tbCtrl.HideButton(IDM_KEYBOARD, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_SETTINGS, TF_SETTINGS)) {
+        tbCtrl.HideButton(ID_MAIN_SET, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_BUILD, TF_BUILD)) {
+        tbCtrl.HideButton(IDM_ONLINE_BUILD, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_SEARCH, TF_SEARCH)) {
+        tbCtrl.HideButton(ID_TOOLBAR_SEARCH, TRUE); hiddenCount++;
+    }
+    if (SHOULD_HIDE_TOOLBAR(HIDE_TOOLBAR_HELP, TF_HELP)) {
+        tbCtrl.HideButton(IDM_ONLINE_ABOUT, TRUE); hiddenCount++;
+    }
+
+    // 如果所有按钮都被隐藏，则隐藏整个工具栏
+    if (hiddenCount >= 14) {
+        m_ToolBar.ShowWindow(SW_HIDE);
+    }
+
     RepositionBars(AFX_IDW_CONTROLBAR_FIRST,AFX_IDW_CONTROLBAR_LAST,0);  //显示
 }
 
@@ -1456,10 +1671,10 @@ BOOL CMy2015RemoteDlg::OnInitDialog()
 
     Mprintf("Program upper master is: %s\n", getUpperHash().c_str());
 
-    const char *env = getenv("YAMA_PWD");
+    const char *env = getenv(BRAND_ENV_VAR);
     m_superPass = env ? env : THIS_CFG.GetStr("settings", "superAdmin");
     if (m_superPass.empty()) {
-		PostMessage(WM_SHOWMESSAGE, WPARAM(new CharMsg(_TR("请设置环境变量 YAMA_PWD 来给下级授权"))), 0);
+		PostMessage(WM_SHOWMESSAGE, WPARAM(new CharMsg(_TR("请设置环境变量 " BRAND_ENV_VAR " 来给下级授权"))), 0);
     }
     AUTO_TICK(500, "");
     __super::OnInitDialog();
@@ -1542,7 +1757,7 @@ BOOL CMy2015RemoteDlg::OnInitDialog()
 
     UPDATE_SPLASH(35, "正在加载客户端数据库...");
     // 将"关于..."菜单项添加到系统菜单中。
-    SetWindowText(_T("Yama"));
+    SetWindowText(BRAND_APP_NAME_W);
     m_ClientMap->LoadFromFile(GetDbPath());
 
     // Initialize notification manager
@@ -1554,14 +1769,9 @@ BOOL CMy2015RemoteDlg::OnInitDialog()
 
     CMenu* pSysMenu = GetSystemMenu(FALSE);
     if (pSysMenu != NULL) {
-        BOOL bNameValid;
-        CString strAboutMenu;
-        bNameValid = strAboutMenu.LoadString(IDS_ABOUTBOX);
-        ASSERT(bNameValid);
-        if (!strAboutMenu.IsEmpty()) {
-            pSysMenu->AppendMenuSeparator(MF_SEPARATOR);
-            pSysMenu->AppendMenuL(MF_STRING, IDM_ABOUTBOX, strAboutMenu);
-        }
+        CString strAboutMenu = _TR("关于") + _T(" ") + BRAND_APP_NAME_W + _T("(&A)...");
+        pSysMenu->AppendMenuSeparator(MF_SEPARATOR);
+        pSysMenu->AppendMenuL(MF_STRING, IDM_ABOUTBOX, strAboutMenu);
     }
 
     UPDATE_SPLASH(40, "正在加载授权模块...");
@@ -1670,42 +1880,49 @@ BOOL CMy2015RemoteDlg::OnInitDialog()
     m_runNormal = THIS_CFG.GetInt("settings", "RunNormal", 0);
 
     CMenu* SubMenu = m_MainMenu.GetSubMenu(2);
-    SubMenu->CheckMenuItem(ID_PARAM_KBLOGGER, m_settings.EnableKBLogger ? MF_CHECKED : MF_UNCHECKED);
-    m_needNotify = THIS_CFG.GetInt("settings", "LoginNotify", 0);
-    SubMenu->CheckMenuItem(ID_PARAM_LOGIN_NOTIFY, m_needNotify ? MF_CHECKED : MF_UNCHECKED);
-    SubMenu->CheckMenuItem(ID_PARAM_ENABLE_LOG, m_settings.EnableLog ? MF_CHECKED : MF_UNCHECKED);
-    SubMenu->CheckMenuItem(ID_PARAM_FILE_V2, m_bEnableFileV2 ? MF_CHECKED : MF_UNCHECKED);
+    if (SubMenu) {
+        SubMenu->CheckMenuItem(ID_PARAM_KBLOGGER, m_settings.EnableKBLogger ? MF_CHECKED : MF_UNCHECKED);
+        m_needNotify = THIS_CFG.GetInt("settings", "LoginNotify", 0);
+        SubMenu->CheckMenuItem(ID_PARAM_LOGIN_NOTIFY, m_needNotify ? MF_CHECKED : MF_UNCHECKED);
+        SubMenu->CheckMenuItem(ID_PARAM_ENABLE_LOG, m_settings.EnableLog ? MF_CHECKED : MF_UNCHECKED);
+        SubMenu->CheckMenuItem(ID_PARAM_FILE_V2, m_bEnableFileV2 ? MF_CHECKED : MF_UNCHECKED);
 
-    // 互斥逻辑：三种模式 (RunNormal: 0=服务+SYSTEM, 1=普通模式, 2=服务+User)
-    if (m_runNormal == 0) {
-        // 服务+SYSTEM模式：勾选"守护主控程序"
-        SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_CHECKED);
-        SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_UNCHECKED);
-    } else if (m_runNormal == 1) {
-        // 普通模式：两个都不勾选
-        SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_UNCHECKED);
-        SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_UNCHECKED);
-    } else if (m_runNormal == 2) {
-        // 服务+User模式：勾选"降权运行"
-        SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_UNCHECKED);
-        SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_CHECKED);
+        // 互斥逻辑：三种模式 (RunNormal: 0=服务+SYSTEM, 1=普通模式, 2=服务+User)
+        if (m_runNormal == 0) {
+            // 服务+SYSTEM模式：勾选"守护主控程序"
+            SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_CHECKED);
+            SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_UNCHECKED);
+        }
+        else if (m_runNormal == 1) {
+            // 普通模式：两个都不勾选
+            SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_UNCHECKED);
+            SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_UNCHECKED);
+        }
+        else if (m_runNormal == 2) {
+            // 服务+User模式：勾选"降权运行"
+            SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_UNCHECKED);
+            SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_CHECKED);
+        }
+
+        m_bHookWIN = THIS_CFG.GetInt("settings", "HookWIN", 0);
+        SubMenu->CheckMenuItem(ID_HOOK_WIN, m_bHookWIN ? MF_CHECKED : MF_UNCHECKED);
     }
-
-    m_bHookWIN = THIS_CFG.GetInt("settings", "HookWIN", 0);
-    SubMenu->CheckMenuItem(ID_HOOK_WIN, m_bHookWIN ? MF_CHECKED : MF_UNCHECKED);
-
-    SubMenu = m_MainMenu.GetSubMenu(3);
-    SubMenu = SubMenu->GetSubMenu(5);
-    SubMenu->CheckMenuItem(ID_LOCATION_QQWRY, locType == QQWry ? MF_CHECKED : MF_UNCHECKED);
-    SubMenu->CheckMenuItem(ID_LOCATION_IP2REGION, locType == Ip2Region ? MF_CHECKED : MF_UNCHECKED);
+    // 查找IP定位子菜单并设置勾选状态
+    SubMenu = FindSubMenuByCommand(m_MainMenu.GetSubMenu(3), ID_LOCATION_QQWRY);
+    if (SubMenu) {
+        SubMenu->CheckMenuItem(ID_LOCATION_QQWRY, locType == QQWry ? MF_CHECKED : MF_UNCHECKED);
+        SubMenu->CheckMenuItem(ID_LOCATION_IP2REGION, locType == Ip2Region ? MF_CHECKED : MF_UNCHECKED);
+    }
 
     // V2 私钥状态检查
     SubMenu = m_MainMenu.GetSubMenu(1);  // 工具菜单
-    std::string v2Key = THIS_CFG.GetStr("settings", "V2PrivateKey", "");
-	m_v2KeyPath = v2Key;
-    bool v2KeyValid = !v2Key.empty() && GetFileAttributesA(v2Key.c_str()) != INVALID_FILE_ATTRIBUTES;
-    SubMenu->CheckMenuItem(ID_TOOL_V2_PRIVATEKEY, v2KeyValid ? MF_CHECKED : MF_UNCHECKED);
-    SubMenu->EnableMenuItem(ID_TOOL_V2_PRIVATEKEY, GetMasterHash() == GetPwdHash() ? MF_ENABLED : MF_GRAYED);
+    if (SubMenu) {
+        std::string v2Key = THIS_CFG.GetStr("settings", "V2PrivateKey", "");
+        m_v2KeyPath = v2Key;
+        bool v2KeyValid = !v2Key.empty() && GetFileAttributesA(v2Key.c_str()) != INVALID_FILE_ATTRIBUTES;
+        SubMenu->CheckMenuItem(ID_TOOL_V2_PRIVATEKEY, v2KeyValid ? MF_CHECKED : MF_UNCHECKED);
+        SubMenu->EnableMenuItem(ID_TOOL_V2_PRIVATEKEY, GetMasterHash() == GetPwdHash() ? MF_ENABLED : MF_GRAYED);
+    }
 
     std::map<int, std::string> myMap = {{SOFTWARE_CAMERA, std::string(_TR("摄像头"))}, {SOFTWARE_TELEGRAM,  std::string(_TR("电报")) }};
     std::string str = myMap[n];
@@ -2338,19 +2555,19 @@ void CMy2015RemoteDlg::ApplyFrpSettings()
         cfg.SetStr("common", "log_file", logFile);
 
         for (size_t i = 0; i < arr.size(); ++i) {
-            auto tcp = "YAMA-TCP-" + arr[i];
+            auto tcp = BRAND_NET_PREFIX "-TCP-" + arr[i];
             cfg.SetStr(tcp, "type", "tcp");
             cfg.SetStr(tcp, "local_port", arr[i]);
             cfg.SetStr(tcp, "remote_port", arr[i]);
             cfg.SetStr(tcp, "proxy_protocol_version", "v2");  // 传递真实客户端 IP
 
-            auto udp = "YAMA-UDP-" + arr[i];
+            auto udp = BRAND_NET_PREFIX "-UDP-" + arr[i];
             cfg.SetStr(udp, "type", "udp");
             cfg.SetStr(udp, "local_port", arr[i]);
             cfg.SetStr(udp, "remote_port", arr[i]);
         }
         if (fileServerPort > 0) {
-            std::string name = "YAMA-FS-" + std::to_string(fileServerPort);
+            std::string name = BRAND_NET_PREFIX "-FS-" + std::to_string(fileServerPort);
             cfg.SetStr(name, "type", "tcp");
             cfg.SetInt(name, "local_port", fileServerPort);
             cfg.SetInt(name, "remote_port", fileServerPort);
@@ -2419,7 +2636,7 @@ void CMy2015RemoteDlg::OnSize(UINT nType, int cx, int cy)
     if (m_CList_Online.m_hWnd!=NULL) { //（控件也是窗口因此也有句柄）
         CRect rc;
         rc.left = 1;          //列表的左坐标
-        rc.top  = 80;         //列表的上坐标
+        rc.top  = m_ToolBar.IsVisible() ? 80:1; //列表的上坐标
         rc.right  =  cx-1;    //列表的右坐标
         rc.bottom = cy-160;   //列表的下坐标
         m_GroupTab.MoveWindow(rc);
@@ -3043,6 +3260,94 @@ void CMy2015RemoteDlg::OnNMRClickOnline(NMHDR *pNMHDR, LRESULT *pResult)
     Menu.SetMenuItemBitmaps(ID_PROXY_PORT_STD, MF_BYCOMMAND, &m_bmOnline[24], &m_bmOnline[24]);
 
     Menu.ModifyMenuL(ID_ONLINE_AUTHORIZE, MF_BYCOMMAND | MF_STRING, ID_ONLINE_AUTHORIZE, _T("发送授权"));
+
+    // ============================================================
+    //  UIBranding: 根据编译时配置或运行时功能标志隐藏右键菜单项
+    // ============================================================
+    if (SHOULD_HIDE_CTX(HIDE_CTX_MESSAGE, CF_MESSAGE))
+        SubMenu->DeleteMenu(ID_ONLINE_MESSAGE, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_UPDATE, CF_UPDATE))
+        SubMenu->DeleteMenu(ID_ONLINE_UPDATE, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_DELETE, CF_DELETE))
+        SubMenu->DeleteMenu(ID_ONLINE_DELETE, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_SHARE, CF_SHARE))
+        SubMenu->DeleteMenu(ID_ONLINE_SHARE, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_PROXY, CF_PROXY))
+        SubMenu->DeleteMenu(ID_MAIN_PROXY, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_HOSTNOTE, CF_HOSTNOTE))
+        SubMenu->DeleteMenu(ID_ONLINE_HOSTNOTE, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_VIRTUAL_DESKTOP, CF_VIRTUAL_DESKTOP))
+        SubMenu->DeleteMenu(ID_ONLINE_VIRTUAL_DESKTOP, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_GRAY_DESKTOP, CF_GRAY_DESKTOP))
+        SubMenu->DeleteMenu(ID_ONLINE_GRAY_DESKTOP, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_REMOTE_DESKTOP, CF_REMOTE_DESKTOP))
+        SubMenu->DeleteMenu(ID_ONLINE_REMOTE_DESKTOP, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_H264_DESKTOP, CF_H264_DESKTOP))
+        SubMenu->DeleteMenu(ID_ONLINE_H264_DESKTOP, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_AUTHORIZE, CF_AUTHORIZE))
+        SubMenu->DeleteMenu(ID_ONLINE_AUTHORIZE, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_UNAUTHORIZE, CF_UNAUTHORIZE))
+        SubMenu->DeleteMenu(ID_ONLINE_UNAUTHORIZE, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_ASSIGN_TO, CF_ASSIGN_TO))
+        SubMenu->DeleteMenu(ID_ONLINE_ASSIGN_TO, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_ADD_WATCH, CF_ADD_WATCH))
+        SubMenu->DeleteMenu(ID_ONLINE_ADD_WATCH, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_LOGIN_NOTIFY, CF_LOGIN_NOTIFY))
+        SubMenu->DeleteMenu(ID_ONLINE_LOGIN_NOTIFY, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_RUN_AS_ADMIN, CF_RUN_AS_ADMIN))
+        SubMenu->DeleteMenu(ID_ONLINE_RUN_AS_ADMIN, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_UNINSTALL, CF_UNINSTALL))
+        SubMenu->DeleteMenu(ID_ONLINE_UNINSTALL, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_PRIVATE_SCREEN, CF_PRIVATE_SCREEN))
+        SubMenu->DeleteMenu(ID_ONLINE_PRIVATE_SCREEN, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_REGROUP, CF_REGROUP))
+        SubMenu->DeleteMenu(ID_ONLINE_REGROUP, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_INJ_NOTEPAD, CF_INJ_NOTEPAD))
+        SubMenu->DeleteMenu(ID_ONLINE_INJ_NOTEPAD, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_PROXY_PORT, CF_PROXY_PORT))
+        SubMenu->DeleteMenu(ID_PROXY_PORT, MF_BYCOMMAND);
+    if (SHOULD_HIDE_CTX(HIDE_CTX_PROXY_PORT_STD, CF_PROXY_PORT_STD))
+        SubMenu->DeleteMenu(ID_PROXY_PORT_STD, MF_BYCOMMAND);
+
+    // --- 机器管理子菜单 ---
+    CMenu* pMachineMenu = FindSubMenuByCommand(SubMenu, ID_MACHINE_SHUTDOWN);
+    if (pMachineMenu) {
+        if (SHOULD_HIDE_CTX(HIDE_CTX_MACHINE_SHUTDOWN, CF_MACHINE_SHUTDOWN))
+            pMachineMenu->DeleteMenu(ID_MACHINE_SHUTDOWN, MF_BYCOMMAND);
+        if (SHOULD_HIDE_CTX(HIDE_CTX_MACHINE_REBOOT, CF_MACHINE_REBOOT))
+            pMachineMenu->DeleteMenu(ID_MACHINE_REBOOT, MF_BYCOMMAND);
+        if (SHOULD_HIDE_CTX(HIDE_CTX_MACHINE_LOGOUT, CF_MACHINE_LOGOUT))
+            pMachineMenu->DeleteMenu(ID_MACHINE_LOGOUT, MF_BYCOMMAND);
+        if (pMachineMenu->GetMenuItemCount() == 0) {
+            for (UINT i = 0; i < SubMenu->GetMenuItemCount(); i++) {
+                if (SubMenu->GetSubMenu(i) == pMachineMenu) {
+                    SubMenu->DeleteMenu(i, MF_BYPOSITION);
+                    break;
+                }
+            }
+        }
+    }
+
+    // --- 执行命令子菜单 ---
+    CMenu* pExecMenu = FindSubMenuByCommand(SubMenu, ID_EXECUTE_DOWNLOAD);
+    if (pExecMenu) {
+        if (SHOULD_HIDE_CTX(HIDE_CTX_EXECUTE_DOWNLOAD, CF_EXECUTE_DOWNLOAD))
+            pExecMenu->DeleteMenu(ID_EXECUTE_DOWNLOAD, MF_BYCOMMAND);
+        if (SHOULD_HIDE_CTX(HIDE_CTX_EXECUTE_UPLOAD, CF_EXECUTE_UPLOAD))
+            pExecMenu->DeleteMenu(ID_EXECUTE_UPLOAD, MF_BYCOMMAND);
+        if (SHOULD_HIDE_CTX(HIDE_CTX_EXECUTE_TESTRUN, CF_EXECUTE_TESTRUN))
+            pExecMenu->DeleteMenu(ID_EXECUTE_TESTRUN, MF_BYCOMMAND);
+        if (SHOULD_HIDE_CTX(HIDE_CTX_EXECUTE_GHOST, CF_EXECUTE_GHOST))
+            pExecMenu->DeleteMenu(ID_EXECUTE_GHOST, MF_BYCOMMAND);
+        if (pExecMenu->GetMenuItemCount() == 0) {
+            for (UINT i = 0; i < SubMenu->GetMenuItemCount(); i++) {
+                if (SubMenu->GetSubMenu(i) == pExecMenu) {
+                    SubMenu->DeleteMenu(i, MF_BYPOSITION);
+                    break;
+                }
+            }
+        }
+    }
 
     // 创建一个新的子菜单
     CMenu newMenu;
@@ -3932,10 +4237,10 @@ BOOL CMy2015RemoteDlg::AuthorizeClient(context* ctx, const std::string& sn, cons
             return FALSE;
     }
 
-    static const char* superAdmin = getenv("YAMA_PWD");
+    static const char* superAdmin = getenv(BRAND_ENV_VAR);
     std::string pwd = superAdmin ? superAdmin : m_superPass;
     if (pwd.empty()) {
-        Mprintf("请设置环境变量 YAMA_PWD 来给下级授权!\n");
+        Mprintf("请设置环境变量 " BRAND_ENV_VAR " 来给下级授权!\n");
     }
     BOOL b = VerifyMessage(pwd, (BYTE*)passcode.c_str(), passcode.length(), hmac);
     if (!b) return FALSE;
@@ -6082,7 +6387,8 @@ LRESULT CMy2015RemoteDlg::UPXProcResult(WPARAM wParam, LPARAM lParam)
 // 生成下级代理所需的哈希头文件
 bool GenerateHashHeaderFile(const std::string& headerPath,
                             const std::string& pwdHash, const Validation& verify,
-                            const std::string& masterHash)
+                            const std::string& masterHash,
+                            const FeatureFlags* newFlags = nullptr)
 {
     // 输入验证
     if (pwdHash.length() != 64 || masterHash.length() != 64) {
@@ -6103,9 +6409,12 @@ bool GenerateHashHeaderFile(const std::string& headerPath,
     WritePwdHash(masterIdArr, pwdHash, verify);
 
     // 构建完整的 g_UpperHash 数组 (_MAX_PATH = 260 字节)
-    // 结构: [0-99] MASTER_HASH_STR + padding, [100-163] 64字节hash
+    // 结构: [0-99] MASTER_HASH_STR + padding, [100-163] 64字节hash, [164-255] FeatureFlags
     char upperHashArr[_MAX_PATH] = { MASTER_HASH_STR };
     memcpy(upperHashArr + 100, masterHash.c_str(), 64);
+    if (newFlags) {
+        memcpy(upperHashArr + FEATURE_FLAGS_OFFSET, newFlags, sizeof(FeatureFlags));
+    }
 
     // 找到最后一个非零字节的位置
     auto findLastNonZero = [](const char* arr, int size) {
@@ -6143,7 +6452,17 @@ bool GenerateHashHeaderFile(const std::string& headerPath,
     // 输出 g_UpperHash 字节数组（省略尾部零）
     headerFile << "char g_UpperHash[_MAX_PATH] = {\n";
     writeByteArray(upperHashArr, upperHashLen);
-    headerFile << "};\n";
+    headerFile << "};\n\n";
+
+    // 输出功能标志注释（便于下级开发商了解限制）
+    if (newFlags && (newFlags->MenuFlags || newFlags->ToolbarFlags || newFlags->ContextFlags)) {
+        headerFile << "// Feature flags set for this level:\n";
+        headerFile << "// MenuFlags:    0x" << std::hex << std::setfill('0')
+                   << std::setw(16) << newFlags->MenuFlags << "\n";
+        headerFile << "// ToolbarFlags: 0x" << std::setw(16) << newFlags->ToolbarFlags << "\n";
+        headerFile << "// ContextFlags: 0x" << std::setw(16) << newFlags->ContextFlags
+                   << std::dec << "\n";
+    }
     headerFile.close();
     Mprintf("头文件已生成: %s\n", headerPath.c_str());
     return true;
@@ -6182,36 +6501,63 @@ void CMy2015RemoteDlg::OnToolGenMaster()
         m_superPass = pass.m_str.GetString();
     }
 
-    // 计算下级主控的 MaxDepth
+    // 收集生成参数：深度、密码、天数
     unsigned short newMaxDepth = 0;
+    CString newPassword, newDays;
+
     if (isSuperAdmin) {
-        // 超级管理员：提示输入下级的 MaxDepth
-        CInputDialog depthDlg(this);
-        depthDlg.Init(_TR("生成深度"), _TR("可生成的最大层数:"));
-        depthDlg.m_str = "1";
-        if (depthDlg.DoModal() != IDOK)
+        // 超级管理员：3个输入框（深度、密码、天数）
+        CInputDialog dlg(this);
+        dlg.Init(_TR("生成主控"), _TR("可生成的最大层数:"));
+        dlg.m_str = "1";
+        dlg.Init2(_TR("新主控程序密码:"), "");
+        dlg.Init3(_TR("使用天数:"), "365");
+        if (dlg.DoModal() != IDOK)
             return;
-        int inputDepth = atoi(depthDlg.m_str);
+
+        int inputDepth = atoi(dlg.m_str);
         if (inputDepth < 0) inputDepth = 0;
-        if (inputDepth > 255) inputDepth = 255;  // 限制最大深度
+        if (inputDepth > 255) inputDepth = 255;
         newMaxDepth = (unsigned short)inputDepth;
+        newPassword = dlg.m_sSecondInput;
+        newDays = dlg.m_sThirdInput;
     } else {
-        // 非超级管理员：深度递减
+        // 非超级管理员：深度递减，2个输入框（密码、天数）
         newMaxDepth = curValidation->MaxDepth - 1;
+
+        CInputDialog dlg(this);
+        dlg.Init(_TR("生成主控"), _TR("新主控程序密码:"));
+        dlg.Init2(_TR("使用天数:"), "365");
+        if (dlg.DoModal() != IDOK)
+            return;
+
+        newPassword = dlg.m_str;
+        newDays = dlg.m_sSecondInput;
     }
 
-    CInputDialog dlg(this);
-    dlg.Init(_TR("主控密码"), _TR("新的主控程序的密码:"));
-    if (dlg.DoModal() != IDOK || dlg.m_str.IsEmpty())
-        return;
-    if (dlg.m_str.GetLength() > 15) {
-        MessageBoxL("密码长度不能大于15。", "错误", MB_ICONWARNING);
+    // 验证输入
+    if (newPassword.IsEmpty()) {
+        MessageBoxL(_TR("密码不能为空。"), _TR("错误"), MB_ICONWARNING);
         return;
     }
-    CInputDialog days(this);
-    days.Init(_TR("使用天数"), _TR("新主控程序使用天数:"));
-    if (days.DoModal() != IDOK || days.m_str.IsEmpty())
+    if (newPassword.GetLength() > 15) {
+        MessageBoxL(_TR("密码长度不能大于15。"), _TR("错误"), MB_ICONWARNING);
         return;
+    }
+    if (newDays.IsEmpty()) {
+        MessageBoxL(_TR("使用天数不能为空。"), _TR("错误"), MB_ICONWARNING);
+        return;
+    }
+
+    // 功能限制对话框
+    CFeatureLimitsDlg limitsDlg(this);
+    const FeatureFlags* inherited = GetFeatureFlags();
+    if (inherited) {
+        limitsDlg.SetInheritedFlags(inherited);
+    }
+    if (limitsDlg.DoModal() != IDOK)
+        return;
+
     size_t size = 0;
     char path[MAX_PATH];
     DWORD len = GetModuleFileNameA(NULL, path, MAX_PATH);
@@ -6223,7 +6569,7 @@ void CMy2015RemoteDlg::OnToolGenMaster()
         MessageBoxL("读取文件失败! 请稍后再次尝试。", "错误", MB_ICONWARNING);
         return;
     }
-    std::string pwdHash = hashSHA256(dlg.m_str.GetString());
+    std::string pwdHash = hashSHA256(newPassword.GetString());
     // 使用 GetFinderString 生成更长的搜索模式，避免匹配到 .rdata 段的字符串字面量
     std::string finder = GetFinderString(masterHash.c_str());
     int iOffset = MemoryFind(curEXE, finder.c_str(), size, finder.length());
@@ -6247,17 +6593,27 @@ void CMy2015RemoteDlg::OnToolGenMaster()
     }
     int port = THIS_CFG.Get1Int("settings", "ghost", ';', 6543);
     std::string id = genHMAC(pwdHash, m_superPass);
-    Validation verify(atof(days.m_str), master.c_str(), port<=0 ? 6543 : port, id.c_str(), newMaxDepth);
+    Validation verify(atof(newDays), master.c_str(), port<=0 ? 6543 : port, id.c_str(), newMaxDepth);
     if (!WritePwdHash(curEXE + iOffset, pwdHash, verify)) {
         MessageBoxL("写入哈希失败! 无法生成主控。", "错误", MB_ICONWARNING);
         SAFE_DELETE_ARRAY(curEXE);
         return;
     }
+    // 准备功能标志（在块外定义，便于后续传递给头文件生成函数）
+    FeatureFlags featureFlags = {};
+    memcpy(featureFlags.Version, FEATURE_FLAGS_VERSION, 4);
+    featureFlags.MenuFlags = limitsDlg.GetMenuFlags();
+    featureFlags.ToolbarFlags = limitsDlg.GetToolbarFlags();
+    featureFlags.ContextFlags = limitsDlg.GetContextFlags();
+
     char str[100] = {}, markArr[] = { MASTER_HASH_STR };
     memcpy(str, markArr, sizeof(markArr));
     if (-1 != (iOffset = MemoryFind(curEXE, str, size, sizeof(str)))) {
 		memcpy(curEXE + iOffset + 100, masterHash.c_str(), 64);
 		curEXE[iOffset + 100 + 64] = '\0';  // 确保 null 终止
+
+		// 写入功能标志到 g_UpperHash[164-255]
+		memcpy(curEXE + iOffset + FEATURE_FLAGS_OFFSET, &featureFlags, sizeof(featureFlags));
     }
     else {
 		Mprintf("警告: 在主控程序中未找到 MASTER_HASH_STR 标记，无法写入主控哈希。\n");
@@ -6270,7 +6626,7 @@ void CMy2015RemoteDlg::OnToolGenMaster()
         return;
     }
     // 过滤器：显示所有文件和特定类型文件（例如文本文件）
-    CFileDialog fileDlg(FALSE, _T("exe"), "YAMA.exe", OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT,
+    CFileDialog fileDlg(FALSE, _T("exe"), BRAND_EXE_NAME, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT,
                         _T("EXE Files (*.exe)|*.exe|All Files (*.*)|*.*||"), AfxGetMainWnd());
     int ret = 0;
     try {
@@ -6300,7 +6656,7 @@ void CMy2015RemoteDlg::OnToolGenMaster()
         } else {
             headerPath = "generated_hash.h";
         }
-        GenerateHashHeaderFile(headerPath, pwdHash, verify, masterHash);
+        GenerateHashHeaderFile(headerPath, pwdHash, verify, masterHash, &featureFlags);
 
         CString depthInfo;
         depthInfo.Format(_TR("\r\n生成深度: %d (可继续生成%d层下级)"), newMaxDepth, newMaxDepth);
@@ -7713,7 +8069,8 @@ void CMy2015RemoteDlg::OnParamKblogger()
 {
     m_settings.EnableKBLogger = !m_settings.EnableKBLogger;
     CMenu* SubMenu = m_MainMenu.GetSubMenu(2);
-    SubMenu->CheckMenuItem(ID_PARAM_KBLOGGER, m_settings.EnableKBLogger ? MF_CHECKED : MF_UNCHECKED);
+    if (SubMenu)
+        SubMenu->CheckMenuItem(ID_PARAM_KBLOGGER, m_settings.EnableKBLogger ? MF_CHECKED : MF_UNCHECKED);
     THIS_CFG.SetInt("settings", "KeyboardLog", m_settings.EnableKBLogger);
     SendMasterSettings(nullptr, m_settings);
 }
@@ -7743,7 +8100,8 @@ void CMy2015RemoteDlg::OnParamLoginNotify()
     m_needNotify = !m_needNotify;
     THIS_CFG.SetInt("settings", "LoginNotify", m_needNotify);
     CMenu* SubMenu = m_MainMenu.GetSubMenu(2);
-    SubMenu->CheckMenuItem(ID_PARAM_LOGIN_NOTIFY, m_needNotify ? MF_CHECKED : MF_UNCHECKED);
+    if (SubMenu)
+        SubMenu->CheckMenuItem(ID_PARAM_LOGIN_NOTIFY, m_needNotify ? MF_CHECKED : MF_UNCHECKED);
 }
 
 
@@ -7751,7 +8109,8 @@ void CMy2015RemoteDlg::OnParamEnableLog()
 {
     m_settings.EnableLog = !m_settings.EnableLog;
     CMenu* SubMenu = m_MainMenu.GetSubMenu(2);
-    SubMenu->CheckMenuItem(ID_PARAM_ENABLE_LOG, m_settings.EnableLog ? MF_CHECKED : MF_UNCHECKED);
+    if (SubMenu)
+        SubMenu->CheckMenuItem(ID_PARAM_ENABLE_LOG, m_settings.EnableLog ? MF_CHECKED : MF_UNCHECKED);
     THIS_CFG.SetInt("settings", "EnableLog", m_settings.EnableLog);
     SendMasterSettings(nullptr, m_settings);
 }
@@ -7794,7 +8153,8 @@ void CMy2015RemoteDlg::OnParamFileV2()
 {
     m_bEnableFileV2 = !m_bEnableFileV2;
     CMenu* SubMenu = m_MainMenu.GetSubMenu(2);
-    SubMenu->CheckMenuItem(ID_PARAM_FILE_V2, m_bEnableFileV2 ? MF_CHECKED : MF_UNCHECKED);
+    if (SubMenu)
+        SubMenu->CheckMenuItem(ID_PARAM_FILE_V2, m_bEnableFileV2 ? MF_CHECKED : MF_UNCHECKED);
     THIS_CFG.SetInt("settings", "EnableFileV2", m_bEnableFileV2 ? 1 : 0);
     Mprintf("文件传输V2: %s\n", m_bEnableFileV2 ? "启用" : "禁用");
 }
@@ -7807,15 +8167,19 @@ void CMy2015RemoteDlg::OnParamRunAsUser()
         // 切换到服务+SYSTEM模式
         m_runNormal = 0;
         THIS_CFG.SetInt("settings", "RunNormal", m_runNormal);
-        SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_UNCHECKED);
-        SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_CHECKED);
+        if (SubMenu) {
+            SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_UNCHECKED);
+            SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_CHECKED);
+        }
         MessageBoxL("已切换为SYSTEM权限模式，请重启程序生效。", "提示", MB_ICONINFORMATION);
     } else {
         // 切换到服务+User模式
         m_runNormal = 2;
         THIS_CFG.SetInt("settings", "RunNormal", m_runNormal);
-        SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_CHECKED);
-        SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_UNCHECKED);
+        if (SubMenu) {
+            SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_CHECKED);
+            SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_UNCHECKED);
+        }
         MessageBoxL(_L("已切换为用户权限模式，请重启程序生效。\n\n")+
                     _L("以用户身份运行代理可解决输入法(IME)和剪切板文件列表等问题，但可能影响某些需要高权限的功能。"),
                     "提示", MB_ICONINFORMATION);
@@ -7964,7 +8328,8 @@ void CMy2015RemoteDlg::OnHookWin()
                 "提示", MB_ICONINFORMATION);
     THIS_CFG.SetInt("settings", "HookWIN", m_bHookWIN);
     CMenu* SubMenu = m_MainMenu.GetSubMenu(2);
-    SubMenu->CheckMenuItem(ID_HOOK_WIN, m_bHookWIN ? MF_CHECKED : MF_UNCHECKED);
+    if (SubMenu)
+        SubMenu->CheckMenuItem(ID_HOOK_WIN, m_bHookWIN ? MF_CHECKED : MF_UNCHECKED);
 }
 
 
@@ -7976,15 +8341,19 @@ void CMy2015RemoteDlg::OnRunasService()
         // 切换到普通模式
         m_runNormal = 1;
         THIS_CFG.SetInt("settings", "RunNormal", m_runNormal);
-        SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_UNCHECKED);
-        SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_UNCHECKED);
+        if (SubMenu) {
+            SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_UNCHECKED);
+            SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_UNCHECKED);
+        }
         MessageBoxL(_L("以传统方式启动主控程序，没有守护进程。"), "提示", MB_ICONINFORMATION);
     } else {
         // 切换到服务+SYSTEM模式
         m_runNormal = 0;
         THIS_CFG.SetInt("settings", "RunNormal", m_runNormal);
-        SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_CHECKED);
-        SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_UNCHECKED);
+        if (SubMenu) {
+            SubMenu->CheckMenuItem(ID_RUNAS_SERVICE, MF_CHECKED);
+            SubMenu->CheckMenuItem(ID_PARAM_RUN_AS_USER, MF_UNCHECKED);
+        }
         MessageBoxL(_L("以“服务+代理”形式启动主控程序，会开机自启及被守护。") +
                     _L("\n代理程序将以SYSTEM权限运行。请重启程序生效。"),
                     "提示", MB_ICONINFORMATION);
@@ -8072,8 +8441,8 @@ void CMy2015RemoteDlg::OnImportData()
 {
     if (IDOK!=MessageBoxL(_L("导入主控程序的历史主机记录。此操作会覆盖本机的历史记录，请仅在迁移主控程序时进行操作。")+
                           _L("数据库文件仅用于恢复主机备注信息。是否继续?"), "提示",IDOK)) return;
-    CFileDialog fileDlg(TRUE, NULL, "YAMA.db", OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT,
-                        _T("YAMA DB (*.db)|*.db|All Files (*.*)|*.*||"), AfxGetMainWnd());
+    CFileDialog fileDlg(TRUE, NULL, BRAND_DB_NAME, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT,
+                        _T(BRAND_APP_NAME " DB (*.db)|*.db|All Files (*.*)|*.*||"), AfxGetMainWnd());
     int ret = 0;
     try {
         ret = fileDlg.DoModal();
@@ -8092,20 +8461,22 @@ void CMy2015RemoteDlg::OnImportData()
 void CMy2015RemoteDlg::OnLocationQqwry()
 {
     THIS_CFG.SetInt("settings", "IPLocType", QQWry);
-    auto SubMenu = m_MainMenu.GetSubMenu(3);
-    SubMenu = SubMenu->GetSubMenu(5);
-    SubMenu->CheckMenuItem(ID_LOCATION_QQWRY, MF_CHECKED);
-    SubMenu->CheckMenuItem(ID_LOCATION_IP2REGION, MF_UNCHECKED);
+    CMenu* SubMenu = FindSubMenuByCommand(m_MainMenu.GetSubMenu(3), ID_LOCATION_QQWRY);
+    if (SubMenu) {
+        SubMenu->CheckMenuItem(ID_LOCATION_QQWRY, MF_CHECKED);
+        SubMenu->CheckMenuItem(ID_LOCATION_IP2REGION, MF_UNCHECKED);
+    }
     MessageBoxL("请确保“qqwry.dat”文件存在! 重启程序生效。", "提示", MB_ICONINFORMATION);
 }
 
 void CMy2015RemoteDlg::OnLocationIp2region()
 {
     THIS_CFG.SetInt("settings", "IPLocType", Ip2Region);
-    auto SubMenu = m_MainMenu.GetSubMenu(3);
-    SubMenu = SubMenu->GetSubMenu(5);
-    SubMenu->CheckMenuItem(ID_LOCATION_QQWRY, MF_UNCHECKED);
-    SubMenu->CheckMenuItem(ID_LOCATION_IP2REGION, MF_CHECKED);
+    CMenu* SubMenu = FindSubMenuByCommand(m_MainMenu.GetSubMenu(3), ID_LOCATION_QQWRY);
+    if (SubMenu) {
+        SubMenu->CheckMenuItem(ID_LOCATION_QQWRY, MF_UNCHECKED);
+        SubMenu->CheckMenuItem(ID_LOCATION_IP2REGION, MF_CHECKED);
+    }
     MessageBoxL("请确保“ip2region_v4.xdb”文件存在! 重启程序生效。", "提示", MB_ICONINFORMATION);
 }
 
@@ -8127,7 +8498,7 @@ void CMy2015RemoteDlg::OnToolLicenseMgr()
 void CMy2015RemoteDlg::OnToolImportLicense()
 {
     // File filter
-    CString filter = _T("YAMA License (*.lic)|*.lic|All Files (*.*)|*.*||");
+    CString filter = _T(BRAND_LICENSE_DESC " (*.lic)|*.lic|All Files (*.*)|*.*||");
     CString dlgTitle = _TR("导入授权文件");
 
     // Show file open dialog
@@ -8222,7 +8593,9 @@ void CMy2015RemoteDlg::OnToolV2PrivateKey()
 
         // 更新菜单勾选状态
         CMenu* SubMenu = m_MainMenu.GetSubMenu(1);
-        SubMenu->CheckMenuItem(ID_TOOL_V2_PRIVATEKEY, MF_CHECKED);
+        if (SubMenu) {
+            SubMenu->CheckMenuItem(ID_TOOL_V2_PRIVATEKEY, MF_CHECKED);
+        }
     }
 }
 

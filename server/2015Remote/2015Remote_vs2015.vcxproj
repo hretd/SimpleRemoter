@@ -297,6 +297,7 @@
     <ClInclude Include="CListCtrlEx.h" />
     <ClInclude Include="context.h" />
     <ClInclude Include="CPasswordDlg.h" />
+    <ClInclude Include="FeatureFlags.h" />
     <ClInclude Include="LicenseFile.h" />
     <ClInclude Include="CRcEditDlg.h" />
     <ClInclude Include="CTextDlg.h" />
@@ -323,6 +324,7 @@
     <ClInclude Include="NotifyConfig.h" />
     <ClInclude Include="NotifyManager.h" />
     <ClInclude Include="NotifySettingsDlg.h" />
+    <ClInclude Include="FeatureLimitsDlg.h" />
     <ClInclude Include="FrpsForSubDlg.h" />
     <ClInclude Include="proxy\HPSocket.h" />
     <ClInclude Include="proxy\HPTypeDef.h" />
@@ -351,6 +353,7 @@
     <ClInclude Include="targetver.h" />
     <ClInclude Include="ToolbarDlg.h" />
     <ClInclude Include="TrueColorToolBar.h" />
+    <ClInclude Include="UIBranding.h" />
     <ClInclude Include="VideoDlg.h" />
     <ClInclude Include="zconf.h" />
     <ClInclude Include="zlib.h" />
@@ -427,6 +430,7 @@
     <ClCompile Include="NetworkDlg.cpp" />
     <ClCompile Include="NotifyManager.cpp" />
     <ClCompile Include="NotifySettingsDlg.cpp" />
+    <ClCompile Include="FeatureLimitsDlg.cpp" />
     <ClCompile Include="FrpsForSubDlg.cpp" />
     <ClCompile Include="Loader.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>

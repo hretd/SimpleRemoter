@@ -924,13 +924,19 @@
 #define IDB_BITMAP_TRIAL                366
 #define IDB_BITMAP_REQUESTAUTH          367
 
+// Feature Limits Dialog
+#define IDD_FEATURE_LIMITS              368
+#define IDC_TAB_FEATURES                2520
+#define IDC_LIST_FEATURES               2521
+#define IDC_STATIC_FEATURE_TIP          2522
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        368
+#define _APS_NEXT_RESOURCE_VALUE        369
 #define _APS_NEXT_COMMAND_VALUE         33040
-#define _APS_NEXT_CONTROL_VALUE         2515
+#define _APS_NEXT_CONTROL_VALUE         2523
 #define _APS_NEXT_SYMED_VALUE           105
 #endif
 #endif

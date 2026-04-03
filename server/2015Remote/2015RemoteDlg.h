@@ -25,7 +25,8 @@
 // 是否使用同步事件处理消息
 #define USING_EVENT 1
 
-#define VERSION_STR "1.2.9"
+#include "UIBranding.h"
+#define VERSION_STR BRAND_VERSION
 
 typedef struct DllInfo {
     std::string Name;
@@ -181,6 +182,8 @@ public:
     VOID CreateToolBar();
     VOID CreateNotifyBar();
     VOID CreateSolidMenu();
+    // 通过菜单项ID查找子菜单（避免硬编码索引）
+    CMenu* FindSubMenuByCommand(CMenu* pParent, UINT commandId);
     int m_nMaxConnection;
     BOOL Activate(const std::string& nPort, int nMaxConnection, const std::string& method);
     void UpdateActiveWindow(CONTEXT_OBJECT* ctx);

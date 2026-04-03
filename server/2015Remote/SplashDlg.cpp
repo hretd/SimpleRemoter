@@ -3,6 +3,7 @@
 #include "resource.h"
 #include "2015Remote.h"
 #include "LangManager.h"
+#include "UIBranding.h"
 
 BEGIN_MESSAGE_MAP(CSplashDlg, CWnd)
     ON_WM_PAINT()
@@ -199,7 +200,7 @@ void CSplashDlg::OnPaint()
     memDC.SetBkMode(TRANSPARENT);
     memDC.SetTextColor(RGB(255, 255, 255));
     CFont* pOldFont = memDC.SelectObject(&m_fontTitle);
-    memDC.TextOut(95, 35, _T("YAMA"));
+    memDC.TextOut(95, 35, BRAND_SPLASH_NAME_W);
     memDC.SelectObject(pOldFont);
 
     // 绘制副标题

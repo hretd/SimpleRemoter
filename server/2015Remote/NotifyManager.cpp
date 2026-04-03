@@ -2,6 +2,7 @@
 #include "NotifyManager.h"
 #include "context.h"
 #include "common/iniFile.h"
+#include "UIBranding.h"
 #include <thread>
 #include <fstream>
 #include <sstream>
@@ -17,7 +18,7 @@ static std::string GetConfigDir()
         if (FAILED(SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, path))) {
             ret = ".\\";
         } else {
-            ret = std::string(path) + "\\YAMA\\";
+            ret = std::string(path) + "\\" BRAND_DATA_FOLDER "\\";
         }
         CreateDirectoryA(ret.c_str(), NULL);
     }

@@ -13,6 +13,7 @@
 #include "generated_hash.h"
 #include "InputDlg.h"
 #include "FrpsForSubDlg.h"
+#include "UIBranding.h"
 
 // 外部函数声明
 extern std::vector<std::string> splitString(const std::string& str, char delimiter);
@@ -1066,10 +1067,10 @@ void CPwdGenDlg::OnBnClickedButtonSaveLicense()
 
         // 构建默认文件名（使用完整 SN）
         CString defaultName;
-        defaultName.Format(_T("YAMA_%s.lic"), m_sDeviceID.GetString());
+        defaultName.Format(_T(BRAND_LICENSE_PREFIX "_%s.lic"), m_sDeviceID.GetString());
 
         // 弹出文件保存对话框
-        CString filter = _T("YAMA License (*.lic)|*.lic|All Files (*.*)|*.*||");
+        CString filter = _T(BRAND_LICENSE_DESC " (*.lic)|*.lic|All Files (*.*)|*.*||");
         CString dlgTitle = _TR("保存授权文件");
 
         CFileDialog dlg(FALSE, _T("lic"), defaultName,
