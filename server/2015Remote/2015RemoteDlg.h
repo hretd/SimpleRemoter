@@ -400,6 +400,9 @@ public:
     afx_msg void OnToolGenShellcode();
     afx_msg void OnOnlineAssignTo();
     afx_msg void OnNMCustomdrawMessage(NMHDR* pNMHDR, LRESULT* pResult);
+    afx_msg void OnRClickMessage(NMHDR* pNMHDR, LRESULT* pResult);
+    afx_msg void OnMsglogDelete();
+    afx_msg void OnMsglogClear();
     afx_msg void OnOnlineAddWatch();
     afx_msg void OnNMCustomdrawOnline(NMHDR* pNMHDR, LRESULT* pResult);
     afx_msg void OnOnlineRunAsAdmin();

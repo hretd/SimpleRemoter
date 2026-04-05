@@ -666,6 +666,8 @@
 #define IDC_RADIO_FRP_CUSTOM            2516
 #define IDC_STATIC_FRP_AUTHMODE         2517
 #define ID_FRPS_FOR_SUB                 33039
+#define ID_MSGLOG_DELETE                33040
+#define ID_MSGLOG_CLEAR                 33041
 #define ID_ONLINE_UPDATE                32772
 #define ID_ONLINE_MESSAGE               32773
 #define ID_ONLINE_DELETE                32775

@@ -788,6 +788,9 @@ BEGIN_MESSAGE_MAP(CMy2015RemoteDlg, CDialogEx)
     ON_COMMAND(ID_TOOL_GEN_SHELLCODE, &CMy2015RemoteDlg::OnToolGenShellcode)
     ON_COMMAND(ID_ONLINE_ASSIGN_TO, &CMy2015RemoteDlg::OnOnlineAssignTo)
     ON_NOTIFY(NM_CUSTOMDRAW, IDC_MESSAGE, &CMy2015RemoteDlg::OnNMCustomdrawMessage)
+    ON_NOTIFY(NM_RCLICK, IDC_MESSAGE, &CMy2015RemoteDlg::OnRClickMessage)
+    ON_COMMAND(ID_MSGLOG_DELETE, &CMy2015RemoteDlg::OnMsglogDelete)
+    ON_COMMAND(ID_MSGLOG_CLEAR, &CMy2015RemoteDlg::OnMsglogClear)
     ON_COMMAND(ID_ONLINE_ADD_WATCH, &CMy2015RemoteDlg::OnOnlineAddWatch)
     ON_COMMAND(ID_ONLINE_LOGIN_NOTIFY, &CMy2015RemoteDlg::OnOnlineLoginNotify)
     ON_NOTIFY(NM_CUSTOMDRAW, IDC_ONLINE, &CMy2015RemoteDlg::OnNMCustomdrawOnline)
@@ -1435,11 +1438,20 @@ LRESULT CMy2015RemoteDlg::OnShowMessage(WPARAM wParam, LPARAM lParam)
     return S_OK;
 }
 
+// 消息日志最大条数，达到上限时删除最旧的记录
+#define MAX_MESSAGE_COUNT 1000
+
 VOID CMy2015RemoteDlg::ShowMessage(CString strType, CString strMsg)
 {
     AUTO_TICK(200, "");
     CTime Timer = CTime::GetCurrentTime();
     CString strTime = Timer.Format("%Y-%m-%d %H:%M:%S");
+
+    // 达到上限时删除最旧的记录
+    int count = m_CList_Message.GetItemCount();
+    if (count >= MAX_MESSAGE_COUNT) {
+        m_CList_Message.DeleteItem(count - 1);
+    }
 
     m_CList_Message.InsertItem(0, strType);    //向控件中设置数据
     m_CList_Message.SetItemText(0,1,strTime);
@@ -1465,6 +1477,12 @@ LRESULT CMy2015RemoteDlg::OnShowErrMessage(WPARAM wParam, LPARAM lParam)
 
     CTime Timer = CTime::GetCurrentTime();
     CString strTime = Timer.FormatL("%Y-%m-%d %H:%M:%S");
+
+    // 达到上限时删除最旧的记录
+    int count = m_CList_Message.GetItemCount();
+    if (count >= MAX_MESSAGE_COUNT) {
+        m_CList_Message.DeleteItem(count - 1);
+    }
 
     m_CList_Message.InsertItem(0, title ? _L(*title) : _TR("操作错误"));
     m_CList_Message.SetItemText(0, 1, strTime);
@@ -7215,6 +7233,48 @@ void CMy2015RemoteDlg::OnNMCustomdrawMessage(NMHDR* pNMHDR, LRESULT* pResult)
         }
     }
     }
+}
+
+void CMy2015RemoteDlg::OnRClickMessage(NMHDR* pNMHDR, LRESULT* pResult)
+{
+    *pResult = 0;
+
+    CMenu menu;
+    menu.CreatePopupMenu();
+    menu.AppendMenu(MF_STRING, ID_MSGLOG_DELETE, _TR("删除选中"));
+    menu.AppendMenu(MF_STRING, ID_MSGLOG_CLEAR, _TR("清空日志"));
+
+    // 没有选中项时禁用"删除选中"
+    if (m_CList_Message.GetSelectedCount() == 0) {
+        menu.EnableMenuItem(ID_MSGLOG_DELETE, MF_GRAYED);
+    }
+    // 列表为空时禁用"清空日志"
+    if (m_CList_Message.GetItemCount() == 0) {
+        menu.EnableMenuItem(ID_MSGLOG_CLEAR, MF_GRAYED);
+    }
+
+    CPoint pt;
+    GetCursorPos(&pt);
+    menu.TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, pt.x, pt.y, this);
+}
+
+void CMy2015RemoteDlg::OnMsglogDelete()
+{
+    // 从后往前删除，避免索引变化
+    POSITION pos = m_CList_Message.GetFirstSelectedItemPosition();
+    std::vector<int> selected;
+    while (pos) {
+        selected.push_back(m_CList_Message.GetNextSelectedItem(pos));
+    }
+    // 倒序删除
+    for (auto it = selected.rbegin(); it != selected.rend(); ++it) {
+        m_CList_Message.DeleteItem(*it);
+    }
+}
+
+void CMy2015RemoteDlg::OnMsglogClear()
+{
+    m_CList_Message.DeleteAllItems();
 }
 
 
