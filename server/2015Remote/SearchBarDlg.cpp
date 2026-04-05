@@ -159,6 +159,28 @@ void CSearchBarDlg::Hide()
     }
 }
 
+void CSearchBarDlg::InvalidateCache()
+{
+    // 杀掉 pending 的搜索定时器，避免竞争条件
+    KillTimer(TIMER_SEARCH);
+
+    // 清空搜索缓存
+    m_strLastSearch.Empty();
+    m_Results.clear();
+    m_nCurrentIndex = -1;
+
+    // 如果搜索栏存在且可见，立即重新搜索并更新界面
+    if (GetSafeHwnd() && IsWindowVisible()) {
+        CString searchText;
+        m_editSearch.GetWindowText(searchText);
+        if (!searchText.IsEmpty()) {
+            DoSearch();
+        } else {
+            UpdateCountText();
+        }
+    }
+}
+
 void CSearchBarDlg::UpdatePosition()
 {
     if (!m_pParent || !GetSafeHwnd()) return;
@@ -206,7 +228,7 @@ void CSearchBarDlg::DoSearch()
         return;
     }
 
-    // 相同文本不重复搜索
+    // 相同文本不重复搜索（注意：Tab 切换时 m_strLastSearch 会被清空，强制重新搜索）
     if (searchText == m_strLastSearch && !m_Results.empty()) {
         return;
     }
@@ -218,17 +240,21 @@ void CSearchBarDlg::DoSearch()
 
     if (!m_pParent) return;
 
-    // 获取当前选中项，用于确定搜索起始位置
-    int nSelectedItem = -1;
+    // 获取当前选中项的 clientID，用于确定搜索起始位置
+    uint64_t selectedClientID = 0;
     POSITION pos = m_pParent->m_CList_Online.GetFirstSelectedItemPosition();
     if (pos) {
-        nSelectedItem = m_pParent->m_CList_Online.GetNextSelectedItem(pos);
+        int nSelectedItem = m_pParent->m_CList_Online.GetNextSelectedItem(pos);
+        EnterCriticalSection(&m_pParent->m_cs);
+        context* selCtx = m_pParent->GetContextByListIndex(nSelectedItem);
+        if (selCtx) selectedClientID = selCtx->GetClientID();
+        LeaveCriticalSection(&m_pParent->m_cs);
     }
 
     // 加锁保护：访问 m_FilteredIndices, m_HostList, context
     EnterCriticalSection(&m_pParent->m_cs);
 
-    // 遍历过滤后的列表
+    // 遍历过滤后的列表，存储匹配项的 clientID（而非索引）
     int count = (int)m_pParent->m_FilteredIndices.size();
     for (int i = 0; i < count; i++) {
         context* ctx = m_pParent->GetContextByListIndex(i);
@@ -259,7 +285,7 @@ void CSearchBarDlg::DoSearch()
         }
 
         if (matched) {
-            m_Results.push_back(i);
+            m_Results.push_back(ctx->GetClientID());
         }
     }
 
@@ -269,9 +295,9 @@ void CSearchBarDlg::DoSearch()
     m_nCurrentIndex = -1;
     if (!m_Results.empty()) {
         m_nCurrentIndex = 0;
-        if (nSelectedItem >= 0) {
+        if (selectedClientID != 0) {
             for (int i = 0; i < (int)m_Results.size(); i++) {
-                if (m_Results[i] >= nSelectedItem) {
+                if (m_Results[i] == selectedClientID) {
                     m_nCurrentIndex = i;
                     break;
                 }
@@ -307,32 +333,77 @@ void CSearchBarDlg::GotoNext()
     UpdateCountText();
 }
 
+int CSearchBarDlg::FindListIndexByClientID(uint64_t clientID)
+{
+    if (!m_pParent || clientID == 0) return -1;
+
+    // 加锁查找
+    EnterCriticalSection(&m_pParent->m_cs);
+    int count = (int)m_pParent->m_FilteredIndices.size();
+    for (int i = 0; i < count; i++) {
+        context* ctx = m_pParent->GetContextByListIndex(i);
+        if (ctx && ctx->GetClientID() == clientID) {
+            LeaveCriticalSection(&m_pParent->m_cs);
+            return i;
+        }
+    }
+    LeaveCriticalSection(&m_pParent->m_cs);
+    return -1;
+}
+
 void CSearchBarDlg::GotoResult(int index)
 {
-    if (index < 0 || index >= (int)m_Results.size()) return;
     if (!m_pParent) return;
 
-    int listIndex = m_Results[index];
+    // 循环查找有效结果（避免递归导致栈溢出）
+    int attempts = 0;
+    int maxAttempts = (int)m_Results.size();
 
-    // 验证索引有效性（列表可能已变化）
-    int itemCount = m_pParent->m_CList_Online.GetItemCount();
-    if (listIndex < 0 || listIndex >= itemCount) {
-        // 索引已失效，清空搜索结果
-        m_Results.clear();
-        m_nCurrentIndex = -1;
-        UpdateCountText();
-        return;
+    while (attempts < maxAttempts) {
+        if (index < 0 || index >= (int)m_Results.size()) {
+            m_nCurrentIndex = -1;
+            UpdateCountText();
+            return;
+        }
+
+        uint64_t clientID = m_Results[index];
+        int listIndex = FindListIndexByClientID(clientID);
+
+        if (listIndex >= 0) {
+            // 找到有效结果
+            m_nCurrentIndex = index;
+
+            // 取消所有选中
+            int nItem = -1;
+            while ((nItem = m_pParent->m_CList_Online.GetNextItem(-1, LVNI_SELECTED)) != -1) {
+                m_pParent->m_CList_Online.SetItemState(nItem, 0, LVIS_SELECTED | LVIS_FOCUSED);
+            }
+
+            // 选中并滚动到目标项
+            m_pParent->m_CList_Online.SetItemState(listIndex, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+            m_pParent->m_CList_Online.EnsureVisible(listIndex, FALSE);
+            return;
+        }
+
+        // 该主机不在当前列表中，移除并尝试下一个
+        m_Results.erase(m_Results.begin() + index);
+        if (m_Results.empty()) {
+            m_nCurrentIndex = -1;
+            UpdateCountText();
+            return;
+        }
+
+        // 调整索引继续查找
+        if (index >= (int)m_Results.size()) {
+            index = 0;
+        }
+        attempts++;
     }
 
-    // 取消所有选中
-    int nItem = -1;
-    while ((nItem = m_pParent->m_CList_Online.GetNextItem(-1, LVNI_SELECTED)) != -1) {
-        m_pParent->m_CList_Online.SetItemState(nItem, 0, LVIS_SELECTED | LVIS_FOCUSED);
-    }
-
-    // 选中并滚动到目标项
-    m_pParent->m_CList_Online.SetItemState(listIndex, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
-    m_pParent->m_CList_Online.EnsureVisible(listIndex, FALSE);
+    // 所有结果都失效
+    m_Results.clear();
+    m_nCurrentIndex = -1;
+    UpdateCountText();
 }
 
 void CSearchBarDlg::UpdateCountText()

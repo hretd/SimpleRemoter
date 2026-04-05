@@ -28,14 +28,17 @@ public:
     CToolTipCtrl m_tooltip;
 
     // 搜索状态
-    std::vector<int> m_Results;      // 匹配项的列表索引
+    std::vector<uint64_t> m_Results; // 匹配项的 clientID（而非索引，避免列表变化导致失效）
     int m_nCurrentIndex;             // 当前高亮的结果索引
     CString m_strLastSearch;         // 上次搜索文本
+
+    int FindListIndexByClientID(uint64_t clientID);  // 根据 clientID 查找当前列表索引
 
     // 方法
     void Show();                     // 显示搜索栏
     void Hide();                     // 隐藏搜索栏
     void DoSearch();                 // 执行搜索
+    void InvalidateCache();          // 清空搜索缓存（Tab切换时调用）
     void GotoPrev();                 // 上一个结果
     void GotoNext();                 // 下一个结果
     void GotoResult(int index);      // 跳转到指定结果

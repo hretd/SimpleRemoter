@@ -6112,6 +6112,7 @@ void CMy2015RemoteDlg::OnOnlineShare()
 {
     CInputDialog dlg(this);
     dlg.Init(_TR("分享主机"), _TR("输入<IP:PORT>地址:"));
+    dlg.SetHistoryKey("ShareAddress");
     if (dlg.DoModal() != IDOK || dlg.m_str.IsEmpty())
         return;
     if (dlg.m_str.GetLength() >= 250) {
@@ -7149,6 +7150,7 @@ void CMy2015RemoteDlg::OnOnlineAssignTo()
 {
     CInputDialog dlg(this);
     dlg.Init(_TR("转移主机(到期自动复原)"), _TR("输入<IP:PORT>地址:"));
+    dlg.SetHistoryKey("ShareAddress");
     dlg.Init2(_TR("天数(支持浮点数):"), "30");
     if (dlg.DoModal() != IDOK || dlg.m_str.IsEmpty() || atof(dlg.m_sSecondInput.GetString())<=0)
         return;
@@ -7436,7 +7438,7 @@ void CMy2015RemoteDlg::OnSelchangeGroupTab(NMHDR* pNMHDR, LRESULT* pResult)
 {
     int nSel = m_GroupTab.GetCurSel();
     TCHAR szText[256] = {};
-    TCITEM item;
+    TCITEM item = {0};
     item.mask = TCIF_TEXT;
     item.pszText = szText;
     item.cchTextMax = sizeof(szText) / sizeof(TCHAR);
@@ -7449,6 +7451,11 @@ void CMy2015RemoteDlg::OnSelchangeGroupTab(NMHDR* pNMHDR, LRESULT* pResult)
     m_selectedGroup = szText;
     LoadListData(szText);
     LeaveCriticalSection(&m_cs);
+
+    // 清空搜索缓存，避免切换 Tab 后搜索结果错乱
+    if (m_pSearchBar) {
+        m_pSearchBar->InvalidateCache();
+    }
 
     *pResult = 0;
 }
@@ -7463,6 +7470,7 @@ void CMy2015RemoteDlg::OnOnlineRegroup()
 {
     CInputDialog dlg(this);
     dlg.Init(_TR("修改分组"), _TR("请输入分组名称:"));
+    dlg.SetHistoryKey("GroupName");
     if (IDOK != dlg.DoModal()||dlg.m_str.IsEmpty()) {
         return;
     }
@@ -7476,21 +7484,30 @@ void CMy2015RemoteDlg::OnOnlineRegroup()
     CAutoLock lock(m_cs);
     m_selectedGroup = dlg.m_str;
     if (m_GroupList.end() == m_GroupList.find(m_selectedGroup)) {
-        m_GroupTab.InsertItem(m_GroupList.size(), m_selectedGroup.c_str());
+        m_GroupTab.InsertItem(m_GroupTab.GetItemCount(), m_selectedGroup.c_str());
         m_GroupList.insert(m_selectedGroup);
     }
-    int idx = 0;
-    for (auto i = m_GroupList.begin(); i != m_GroupList.end(); ++i, ++idx) {
-        if (*i == m_selectedGroup) {
+    // 在 Tab 中直接搜索分组名（Tab 顺序和 set 顺序不一致）
+    int tabCount = m_GroupTab.GetItemCount();
+    for (int idx = 0; idx < tabCount; ++idx) {
+        TCITEM item = {0};
+        char szText[256] = {0};
+        item.mask = TCIF_TEXT;
+        item.pszText = szText;
+        item.cchTextMax = sizeof(szText);
+        if (!m_GroupTab.GetItem(idx, &item)) continue;
+        if (m_selectedGroup == szText) {
             m_GroupTab.SetCurSel(idx);
             NMHDR nmhdr;
             nmhdr.hwndFrom = m_GroupTab.GetSafeHwnd();
             nmhdr.idFrom = m_GroupTab.GetDlgCtrlID();
             nmhdr.code = TCN_SELCHANGE;
             SendMessage(WM_NOTIFY, nmhdr.idFrom, (LPARAM)&nmhdr);
-            break;
+            // SendMessage 会触发 OnSelchangeGroupTab，其中已调用 LoadListData
+            return;
         }
     }
+    // 未找到匹配的 Tab（不应发生），直接加载数据
     LoadListData(m_selectedGroup);
 }
 
