@@ -32,6 +32,7 @@ void CFrpsForSubDlg::DoDataExchange(CDataExchange* pDX)
     CDialogLangEx::DoDataExchange(pDX);
 
     DDX_Control(pDX, IDC_CHECK_FRPS_ENABLED, m_checkEnabled);
+    DDX_Control(pDX, IDC_CHECK_FRPS_LOCAL, m_checkLocalFrps);
     DDX_Control(pDX, IDC_EDIT_FRPS_SERVER, m_editServer);
     DDX_Control(pDX, IDC_EDIT_FRPS_PORT, m_editPort);
     DDX_Control(pDX, IDC_EDIT_FRPS_TOKEN, m_editToken);
@@ -44,6 +45,7 @@ void CFrpsForSubDlg::DoDataExchange(CDataExchange* pDX)
 
 BEGIN_MESSAGE_MAP(CFrpsForSubDlg, CDialogLangEx)
     ON_BN_CLICKED(IDC_CHECK_FRPS_ENABLED, &CFrpsForSubDlg::OnBnClickedCheckFrpsEnabled)
+    ON_BN_CLICKED(IDC_CHECK_FRPS_LOCAL, &CFrpsForSubDlg::OnBnClickedCheckFrpsLocal)
     ON_BN_CLICKED(IDC_BTN_SHOW_TOKEN, &CFrpsForSubDlg::OnBnClickedBtnShowToken)
 END_MESSAGE_MAP()
 
@@ -54,7 +56,17 @@ BOOL CFrpsForSubDlg::OnInitDialog()
     // 设置翻译文本
     SetWindowText(_TR("下级 FRP 代理设置"));
     SetDlgItemText(IDC_CHECK_FRPS_ENABLED, _TR("启用为下级提供 FRP 代理"));
+    SetDlgItemText(IDC_CHECK_FRPS_LOCAL, _TR("FRPS 运行在本机"));
     SetDlgItemText(IDC_GROUP_FRPS_SERVER, _TR("FRPS 服务器配置"));
+
+#ifdef _WIN64
+    // 64 位程序启用本地 FRPS 选项
+    m_checkLocalFrps.EnableWindow(TRUE);
+#else
+    // 32 位程序禁用本地 FRPS 选项（frps.dll 仅支持 64 位）
+    m_checkLocalFrps.EnableWindow(FALSE);
+    m_checkLocalFrps.SetCheck(BST_UNCHECKED);
+#endif
     SetDlgItemText(IDC_STATIC_FRP_AUTHMODE, _TR("认证模式:"));
     SetDlgItemText(IDC_RADIO_FRP_OFFICIAL, _TR("官方 FRP"));
     SetDlgItemText(IDC_RADIO_FRP_CUSTOM, _TR("自定义 FRP"));
@@ -82,6 +94,11 @@ void CFrpsForSubDlg::LoadSettings()
     m_config = GetFrpsConfig();
 
     m_checkEnabled.SetCheck(m_config.enabled ? BST_CHECKED : BST_UNCHECKED);
+#ifdef _WIN64
+    m_checkLocalFrps.SetCheck(m_config.localFrps ? BST_CHECKED : BST_UNCHECKED);
+#else
+    m_checkLocalFrps.SetCheck(BST_UNCHECKED);
+#endif
     m_editServer.SetWindowText(CString(m_config.server.c_str()));
 
     CString portStr;
@@ -106,6 +123,11 @@ void CFrpsForSubDlg::SaveSettings()
     CString str;
 
     m_config.enabled = (m_checkEnabled.GetCheck() == BST_CHECKED);
+#ifdef _WIN64
+    m_config.localFrps = (m_checkLocalFrps.GetCheck() == BST_CHECKED);
+#else
+    m_config.localFrps = false;
+#endif
 
     m_editServer.GetWindowText(str);
     m_config.server = CT2A(str, CP_UTF8);
@@ -127,6 +149,7 @@ void CFrpsForSubDlg::SaveSettings()
 
     // 保存到 INI 文件
     THIS_CFG.SetInt("frps_for_sub", "enabled", m_config.enabled ? 1 : 0);
+    THIS_CFG.SetInt("frps_for_sub", "local_frps", m_config.localFrps ? 1 : 0);
     THIS_CFG.SetStr("frps_for_sub", "server", m_config.server.c_str());
     THIS_CFG.SetInt("frps_for_sub", "port", m_config.port);
     THIS_CFG.SetStr("frps_for_sub", "token", m_config.token.c_str());
@@ -138,8 +161,21 @@ void CFrpsForSubDlg::SaveSettings()
 void CFrpsForSubDlg::UpdateControlStates()
 {
     BOOL enabled = (m_checkEnabled.GetCheck() == BST_CHECKED);
+    BOOL localFrps = (m_checkLocalFrps.GetCheck() == BST_CHECKED);
 
-    m_editServer.EnableWindow(enabled);
+#ifdef _WIN64
+    m_checkLocalFrps.EnableWindow(enabled);
+#else
+    m_checkLocalFrps.EnableWindow(FALSE);
+#endif
+
+    // 如果启用本地 FRPS，服务器地址自动设为 127.0.0.1 且禁用编辑
+    BOOL serverEditable = enabled && !localFrps;
+    m_editServer.EnableWindow(serverEditable);
+    if (localFrps && enabled) {
+        m_editServer.SetWindowText(_T("127.0.0.1"));
+    }
+
     m_editPort.EnableWindow(enabled);
     m_editToken.EnableWindow(enabled);
     m_btnShowToken.EnableWindow(enabled);
@@ -152,7 +188,7 @@ void CFrpsForSubDlg::UpdateControlStates()
     GetDlgItem(IDC_GROUP_FRPS_SERVER)->EnableWindow(enabled);
     GetDlgItem(IDC_GROUP_PORT_RANGE)->EnableWindow(enabled);
     GetDlgItem(IDC_STATIC_FRP_AUTHMODE)->EnableWindow(enabled);
-    GetDlgItem(IDC_STATIC_FRPS_SERVER)->EnableWindow(enabled);
+    GetDlgItem(IDC_STATIC_FRPS_SERVER)->EnableWindow(serverEditable);
     GetDlgItem(IDC_STATIC_FRPS_PORT)->EnableWindow(enabled);
     GetDlgItem(IDC_STATIC_FRPS_TOKEN)->EnableWindow(enabled);
     GetDlgItem(IDC_STATIC_PORT_START)->EnableWindow(enabled);
@@ -234,6 +270,11 @@ void CFrpsForSubDlg::OnBnClickedCheckFrpsEnabled()
     UpdateControlStates();
 }
 
+void CFrpsForSubDlg::OnBnClickedCheckFrpsLocal()
+{
+    UpdateControlStates();
+}
+
 void CFrpsForSubDlg::OnBnClickedBtnShowToken()
 {
     m_bShowToken = !m_bShowToken;
@@ -258,8 +299,8 @@ void CFrpsForSubDlg::OnBnClickedBtnShowToken()
     m_editToken.CreateEx(WS_EX_CLIENTEDGE, _T("EDIT"), currentText, style, rect, this, IDC_EDIT_FRPS_TOKEN);
     m_editToken.SetFont(GetFont());
 
-    // 更新按钮文字
-    m_btnShowToken.SetWindowText(m_bShowToken ? _T("*") : _T("*"));
+    // 更新按钮文字（显示时用眼睛图标，隐藏时用星号）
+    m_btnShowToken.SetWindowText(m_bShowToken ? _T("○") : _T("*"));
 }
 
 // 静态方法：获取 FRPS 配置
@@ -267,6 +308,7 @@ FrpsConfig CFrpsForSubDlg::GetFrpsConfig()
 {
     FrpsConfig config;
     config.enabled = THIS_CFG.GetInt("frps_for_sub", "enabled", 0) != 0;
+    config.localFrps = THIS_CFG.GetInt("frps_for_sub", "local_frps", 0) != 0;
     config.server = THIS_CFG.GetStr("frps_for_sub", "server", "");
     config.port = THIS_CFG.GetInt("frps_for_sub", "port", 7000);
     config.token = THIS_CFG.GetStr("frps_for_sub", "token", "");

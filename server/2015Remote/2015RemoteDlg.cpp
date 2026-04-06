@@ -1975,6 +1975,11 @@ BOOL CMy2015RemoteDlg::OnInitDialog()
     UpdateStatusBarStats();  // 立即更新一次
 
     UPDATE_SPLASH(85, "正在启动FRP代理...");
+#ifdef _WIN64
+    if (InitLocalFrpsServer()) {  // 本地 FRPS 服务器 (仅 64 位，需先于 FRPC 启动)
+        Sleep(500);  // 等待 FRPS 启动完成
+    }
+#endif
     InitFrpClients();
     InitFrpcAuto();  // FRP 自动代理（由上级提供配置）
 
@@ -2033,10 +2038,16 @@ DWORD WINAPI CMy2015RemoteDlg::StartFrpClient(LPVOID param)
     }
 
     Mprintf("[FRP-%d] Calling m_frpRun...\n", idx);
-    int n = This->m_frpRun((char*)cfgPath.c_str(), &inst.status);
-    if (n) {
-        Mprintf("[FRP-%d] Connection failed\n", idx);
-    }
+    int n = 0;
+    do {
+        inst.status = STATUS_RUN;
+        n = This->m_frpRun((char*)cfgPath.c_str(), &inst.status);
+        if (n) {
+            Mprintf("[FRP-%d] Connection failed: %d\n", idx, n);
+            WAIT_n(!This->isClosed, 10, 1000);
+            if (This->isClosed) break;
+        }
+    } while (n);
 
     inst.hThread = NULL;
     Mprintf("[FRP-%d] Thread stopped\n", idx);
@@ -2085,12 +2096,25 @@ void CMy2015RemoteDlg::InitFrpClients()
 #else
     int usingFRP = 0;
 #endif
+
+    // 检查是否有上级配置的 FRP
+    std::string frpConfigStr = THIS_CFG.GetStr("settings", "FrpConfig", "");
+    std::string frpAutoServer = THIS_CFG.GetStr("frp_auto", "server", "");
+    int frpAutoPort = THIS_CFG.GetInt("frp_auto", "remotePort", 0);
+    bool hasUpperFrp = !frpConfigStr.empty() || (!frpAutoServer.empty() && frpAutoPort > 0);
     std::string ip = THIS_CFG.GetStr("settings", "master", "");
-    std::string firstIP = GetFirstMasterIP(ip);
-    CString tip = !ip.empty() && firstIP != m_IPConverter->getPublicIP() ?
-        CString(ip.c_str()) + _L(" 必须是\"公网IP\"或反向代理服务器IP") :
-        _L("请设置\"公网IP\"，或使用反向代理服务器的IP");
-    tip += usingFRP ? _TR("[使用FRP]") : _TR("[未使用FRP]");
+
+    CString tip;
+    if (hasUpperFrp) {
+        // 使用上级配置的 FRP，无需关心公网 IP
+        tip = _L("使用上级配置的FRP代理");
+    } else {
+        std::string firstIP = GetFirstMasterIP(ip);
+        tip = !ip.empty() && firstIP != m_IPConverter->getPublicIP() ?
+            CString(ip.c_str()) + _L(" 必须是\"公网IP\"或反向代理服务器IP") :
+            _L("请设置\"公网IP\"，或使用反向代理服务器的IP");
+        tip += usingFRP ? _TR("[使用FRP]") : _TR("[未使用FRP]");
+    }
     CharMsg* msg = new CharMsg(tip);
     PostMessageA(WM_SHOWMESSAGE, (WPARAM)msg, NULL);
 
@@ -2191,6 +2215,111 @@ void CMy2015RemoteDlg::StopAllFrpClients()
     Mprintf("[FRP] All connections stopped\n");
     // 注意：不释放 m_hFrpDll，会导致崩溃
 }
+
+//////////////////////////////////////////////////////////////////////////
+// 本地 FRPS 服务器 (仅 64 位支持)
+//////////////////////////////////////////////////////////////////////////
+
+#ifdef _WIN64
+bool CMy2015RemoteDlg::InitLocalFrpsServer()
+{
+    // 检查是否启用本地 FRPS
+    FrpsConfig config = CFrpsForSubDlg::GetFrpsConfig();
+    if (!config.enabled || !config.localFrps) {
+        Mprintf("[FRPS] Local FRPS not enabled\n");
+        return false;
+    }
+
+    // 检测系统是否支持 FRPS（64位 + Windows 10+）
+    if (!IsFrpSupported("[FRPS]")) {
+        CharMsg* msg = new CharMsg(_TR("FRP 功能需要 64 位 Windows 10 或更高版本"));
+        PostMessageA(WM_SHOWMESSAGE, (WPARAM)msg, NULL);
+        return false;
+    }
+
+    if (config.token.empty() || config.port <= 0) {
+        Mprintf("[FRPS] Invalid config: token empty or port invalid\n");
+        return false;
+    }
+
+    // 加载 FRPS DLL
+    DWORD size = 0;
+    LPBYTE frpsData = ReadResource(IDR_BINARY_FRPS, size);
+    if (frpsData == nullptr) {
+        Mprintf("[FRPS] Failed to read FRPS DLL from resource\n");
+        return false;
+    }
+
+    m_hFrpsDll = MemoryLoadLibrary(frpsData, size);
+    SAFE_DELETE_ARRAY(frpsData);
+    if (m_hFrpsDll == NULL) {
+        Mprintf("[FRPS] Failed to load FRPS DLL\n");
+        return false;
+    }
+
+    m_frpsRunSimpleWithToken = (FrpsRunSimpleWithTokenFunc)MemoryGetProcAddress(m_hFrpsDll, "RunSimpleWithToken");
+    if (!m_frpsRunSimpleWithToken) {
+        Mprintf("[FRPS] Failed to get RunSimpleWithToken function\n");
+        // 注意：不释放 Go DLL，运行时已启动，释放会崩溃
+        return false;
+    }
+
+    // 启动 FRPS 服务器线程
+    m_frpsStatus = STATUS_RUN;
+    m_hFrpsThread = CreateThread(NULL, 0, StartLocalFrpsServer, this, 0, NULL);
+    if (m_hFrpsThread == NULL) {
+        Mprintf("[FRPS] Failed to create FRPS thread\n");
+        m_frpsStatus = STATUS_UNKNOWN;
+        // 注意：不释放 Go DLL，会导致崩溃
+        return false;
+    }
+
+    Mprintf("[FRPS] Local FRPS server starting on port %d\n", config.port);
+
+    return true;
+}
+
+DWORD WINAPI CMy2015RemoteDlg::StartLocalFrpsServer(LPVOID param)
+{
+    CMy2015RemoteDlg* pThis = (CMy2015RemoteDlg*)param;
+    if (!pThis || !pThis->m_frpsRunSimpleWithToken) return 1;
+
+    FrpsConfig config = CFrpsForSubDlg::GetFrpsConfig();
+
+    // 调用 RunSimpleWithToken(token, bindPort, logFile, logLevel, logMaxDays, statusPtr)
+    // 传 NULL 表示使用默认值 (./frps.log, info, 60)
+    int result = pThis->m_frpsRunSimpleWithToken(
+        (char*)config.token.c_str(),
+        config.port,
+        NULL,  // logFile: 使用默认值 ./frps.log
+        NULL,  // logLevel: 使用默认值 info
+        0,     // logMaxDays: 使用默认值 60
+        &pThis->m_frpsStatus
+    );
+
+    Mprintf("[FRPS] Server stopped with result: %d\n", result);
+    pThis->m_hFrpsThread = NULL;
+    return result;
+}
+
+void CMy2015RemoteDlg::StopLocalFrpsServer()
+{
+    if (m_hFrpsThread == NULL) {
+        return;
+    }
+
+    Mprintf("[FRPS] Stopping local FRPS server...\n");
+    m_frpsStatus = STATUS_EXIT;
+
+    // 等待线程结束（轮询方式，与 FRPC 保持一致）
+    while (m_hFrpsThread) {
+        Sleep(20);
+    }
+
+    // 注意：不释放 m_hFrpsDll，会导致崩溃
+    Mprintf("[FRPS] Local FRPS server stopped\n");
+}
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 // FRP 自动代理（由上级提供配置）
@@ -2702,7 +2831,9 @@ void CMy2015RemoteDlg::OnSize(UINT nType, int cx, int cy)
         m_StatusBar.MoveWindow(Rect);
         // 4个分区：消息(自动拉伸)、FRP地址(250px)、运行统计(180px)、到期时间(180px)
         int paneExpire = m_strExpireDate.IsEmpty() ? 0 : 180;  // 无到期信息时隐藏
-        int paneFrp = m_strFrpAddr.IsEmpty() ? 0 : 250;        // 无FRP配置时隐藏
+        // 优先显示上级 FRPC，其次显示本机 FRPS
+        bool hasFrpDisplay = !m_strFrpAddr.IsEmpty() || CFrpsForSubDlg::IsFrpsConfigured();
+        int paneFrp = hasFrpDisplay ? 250 : 0;
         int paneRuntime = 180;
         int paneMsg = max(0, cx - paneFrp - paneRuntime - paneExpire - 20);
         m_StatusBar.SetPaneInfo(0, m_StatusBar.GetItemID(0), SBPS_STRETCH, paneMsg);
@@ -2991,7 +3122,23 @@ void CMy2015RemoteDlg::UpdateStatusBarStats()
         }
     }
     // === 分区1：FRP 地址 ===
-    m_StatusBar.SetPaneText(1, m_strFrpAddr);  // 空时清除默认文本
+    // 优先显示上级配置的 FRPC，其次显示本机 FRPS
+    CString strFrpDisplay = m_strFrpAddr;
+    if (strFrpDisplay.IsEmpty()) {
+        // 没有上级 FRP 配置，检查本机是否配置了 FRPS
+        if (CFrpsForSubDlg::IsFrpsConfigured()) {
+            FrpsConfig frpsCfg = CFrpsForSubDlg::GetFrpsConfig();
+            if (frpsCfg.localFrps) {
+                strFrpDisplay.Format(_T("FRPS :%d"), frpsCfg.port);
+            } else {
+                strFrpDisplay.Format(_T("FRPS %hs:%d"), frpsCfg.server.c_str(), frpsCfg.port);
+            }
+        }
+    }
+    // 根据是否有内容设置分区宽度
+    int paneFrpWidth = strFrpDisplay.IsEmpty() ? 0 : 250;
+    m_StatusBar.SetPaneInfo(1, m_StatusBar.GetItemID(1), SBPS_NORMAL, paneFrpWidth);
+    m_StatusBar.SetPaneText(1, strFrpDisplay);
 
     m_StatusBar.SetPaneText(2, strRuntime);
 
@@ -3105,6 +3252,9 @@ void CMy2015RemoteDlg::Release()
     }
     Sleep(500);
     StopAllFrpClients();
+#ifdef _WIN64
+    StopLocalFrpsServer();  // 停止本地 FRPS 服务器
+#endif
     StopFrpcAuto();  // 停止 FRP 自动代理
 
     THIS_APP->Destroy();
@@ -8685,7 +8835,10 @@ void CMy2015RemoteDlg::OnMenuNotifySettings()
 void CMy2015RemoteDlg::OnFrpsForSub()
 {
     CFrpsForSubDlg dlg(this);
-    dlg.DoModal();
+    if (dlg.DoModal() == IDOK) {
+        // 配置变更后更新状态栏显示
+        UpdateStatusBarStats();
+    }
 }
 
 // Helper function to convert string to lowercase for case-insensitive comparison

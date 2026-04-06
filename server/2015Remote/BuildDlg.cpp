@@ -714,6 +714,22 @@ BOOL CBuildDlg::OnInitDialog()
     }
     SubMenu->CheckMenuItem(ID_RANDOM_NAME, b ? MF_CHECKED : MF_UNCHECKED);
 
+    // 初始化默认 IP 和端口
+    std::string frpAutoServer = THIS_CFG.GetStr("frp_auto", "server", "");
+    if (!frpAutoServer.empty()) {
+        // 使用上级分配的 FRP 配置
+        m_strIP = frpAutoServer.c_str();
+        int frpRemotePort = THIS_CFG.GetInt("frp_auto", "remotePort", 0);
+        if (frpRemotePort > 0) {
+            m_strPort.Format("%d", frpRemotePort);
+        }
+    } else {
+        // 使用本机配置
+        m_strIP = THIS_CFG.GetStr("settings", "master", "").c_str();
+        m_strPort = THIS_CFG.GetStr("settings", "ghost", "6543").c_str();
+    }
+    UpdateData(FALSE);
+
     return TRUE;  // return TRUE unless you set the focus to a control
     // 异常: OCX 属性页应返回 FALSE
 }

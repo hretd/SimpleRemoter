@@ -296,6 +296,18 @@ public:
     void InitFrpClients();
     void StopAllFrpClients();
 
+#ifdef _WIN64
+    // 本地 FRPS 服务器 (仅 64 位支持)
+    HMEMORYMODULE m_hFrpsDll = NULL;
+    typedef int (*FrpsRunSimpleWithTokenFunc)(char*, int, char*, char*, int, int*);
+    FrpsRunSimpleWithTokenFunc m_frpsRunSimpleWithToken = nullptr;
+    int m_frpsStatus = STATUS_UNKNOWN;
+    HANDLE m_hFrpsThread = NULL;
+    static DWORD WINAPI StartLocalFrpsServer(LPVOID param);
+    bool InitLocalFrpsServer();  // 返回 true 表示已启动，需等待
+    void StopLocalFrpsServer();
+#endif
+
     // FRP 自动代理（由上级提供配置）
     struct FrpAutoConfig {
         bool enabled = false;

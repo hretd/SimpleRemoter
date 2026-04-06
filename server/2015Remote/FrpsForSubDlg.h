@@ -12,6 +12,7 @@ enum FrpAuthMode {
 // FRPS 配置结构体
 struct FrpsConfig {
     bool enabled;
+    bool localFrps;          // FRPS 运行在本机
     std::string server;
     int port;
     std::string token;
@@ -19,7 +20,7 @@ struct FrpsConfig {
     int portEnd;
     FrpAuthMode authMode;    // 认证模式
 
-    FrpsConfig() : enabled(false), port(7000), portStart(20000), portEnd(29999), authMode(FRP_AUTH_PRIVILEGE_KEY) {}
+    FrpsConfig() : enabled(false), localFrps(false), port(7000), portStart(20000), portEnd(29999), authMode(FRP_AUTH_PRIVILEGE_KEY) {}
 };
 
 // 下级 FRP 代理设置对话框
@@ -54,6 +55,7 @@ protected:
     DECLARE_MESSAGE_MAP()
 
     afx_msg void OnBnClickedCheckFrpsEnabled();
+    afx_msg void OnBnClickedCheckFrpsLocal();
     afx_msg void OnBnClickedBtnShowToken();
 
 private:
@@ -65,6 +67,7 @@ private:
 private:
     // 控件变量
     CButton m_checkEnabled;
+    CButton m_checkLocalFrps;
     CEdit m_editServer;
     CEdit m_editPort;
     CEdit m_editToken;

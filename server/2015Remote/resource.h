@@ -211,6 +211,7 @@
 #define IDD_DIALOG_TERMINAL             331
 #define IDD_DIALOG_NOTIFY_SETTINGS      332
 #define IDD_SEARCH_BAR                  335
+#define IDR_BINARY_FRPS                 336
 #define IDC_MESSAGE                     1000
 #define IDC_ONLINE                      1001
 #define IDC_STATIC_TIPS                 1002
@@ -495,6 +496,7 @@
 #define IDC_GROUP_SET_DESKTOP           2267
 #define IDC_GROUP_SET_PARAMS            2268
 #define IDC_STATIC_SET_TIP3             2269
+#define IDC_STATIC_SET_IP_HINT          2270
 #define IDC_EDIT_ROOT_CERT              2280
 #define IDC_STATIC_ROOT_CERT            2281
 #define IDC_BTN_EXIT_FULLSCREEN         2300
@@ -665,6 +667,7 @@
 #define IDC_RADIO_FRP_OFFICIAL          2515
 #define IDC_RADIO_FRP_CUSTOM            2516
 #define IDC_STATIC_FRP_AUTHMODE         2517
+#define IDC_CHECK_FRPS_LOCAL            2518
 #define ID_FRPS_FOR_SUB                 33039
 #define ID_MSGLOG_DELETE                33040
 #define ID_MSGLOG_CLEAR                 33041

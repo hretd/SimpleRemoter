@@ -54,8 +54,10 @@ static std::string BuildChecksumContent(const std::string& magic,
     content += sn + "|";
     content += password + "|";
     content += pwdHmac + "|";
-    content += authorization + "|";
-    content += frpConfig;
+    content += authorization;
+    if (!frpConfig.empty()) {
+        content += "|" + frpConfig;
+    }
     return content;
 }
 

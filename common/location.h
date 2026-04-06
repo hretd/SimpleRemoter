@@ -135,6 +135,60 @@ public:
         return false;
     }
 
+    /**
+     * 判断给定的 IP 地址是否是公网 IP
+     */
+    bool IsPublicIP(const std::string& ipAddress)
+    {
+        in_addr addr;
+        if (inet_pton(AF_INET, ipAddress.c_str(), &addr) != 1) return false;
+        unsigned long h = ntohl(addr.s_addr);
+        if ((h & 0xFF000000) == 0x0A000000) return false;  // 10.0.0.0/8
+        if ((h & 0xFFF00000) == 0xAC100000) return false;  // 172.16.0.0/12
+        if ((h & 0xFFFF0000) == 0xC0A80000) return false;  // 192.168.0.0/16
+        if ((h & 0xFF000000) == 0x7F000000) return false;  // 127.0.0.0/8
+        if ((h & 0xFF000000) == 0x00000000) return false;  // 0.0.0.0/8
+        if ((h & 0xFFFF0000) == 0xA9FE0000) return false;  // 169.254.0.0/16
+        if ((h & 0xFFC00000) == 0x64400000) return false;  // 100.64.0.0/10
+        if ((h & 0xF0000000) == 0xE0000000) return false;  // 224.0.0.0/4
+        if ((h & 0xF0000000) == 0xF0000000) return false;  // 240.0.0.0/4
+        return true;
+    }
+
+    /**
+     * 获取本机网卡的公网 IP 和私有 IP
+     */
+    void GetLocalIPs(std::string& publicIP, std::string& privateIP)
+    {
+        publicIP.clear();
+        privateIP.clear();
+        ULONG outBufLen = 15000;
+        IP_ADAPTER_ADDRESSES* pAddresses = (IP_ADAPTER_ADDRESSES*)malloc(outBufLen);
+        if (GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_PREFIX, nullptr, pAddresses, &outBufLen) == ERROR_BUFFER_OVERFLOW) {
+            free(pAddresses);
+            pAddresses = (IP_ADAPTER_ADDRESSES*)malloc(outBufLen);
+        }
+        if (GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_PREFIX, nullptr, pAddresses, &outBufLen) == NO_ERROR) {
+            for (IP_ADAPTER_ADDRESSES* pCurr = pAddresses; pCurr; pCurr = pCurr->Next) {
+                if (pCurr->OperStatus != IfOperStatusUp) continue;
+                if (pCurr->IfType == IF_TYPE_SOFTWARE_LOOPBACK) continue;
+                for (IP_ADAPTER_UNICAST_ADDRESS* pUnicast = pCurr->FirstUnicastAddress; pUnicast; pUnicast = pUnicast->Next) {
+                    if (pUnicast->Address.lpSockaddr->sa_family != AF_INET) continue;
+                    char addrBuf[INET_ADDRSTRLEN] = { 0 };
+                    sockaddr_in* sa_in = (sockaddr_in*)pUnicast->Address.lpSockaddr;
+                    inet_ntop(AF_INET, &sa_in->sin_addr, addrBuf, sizeof(addrBuf));
+                    std::string ip = addrBuf;
+                    if (ip.substr(0, 4) == "127.") continue;
+                    if (IsPublicIP(ip)) { if (publicIP.empty()) publicIP = ip; }
+                    else { if (privateIP.empty()) privateIP = ip; }
+                    if (!publicIP.empty() && !privateIP.empty()) break;
+                }
+                if (!publicIP.empty() && !privateIP.empty()) break;
+            }
+        }
+        free(pAddresses);
+    }
+
     // 获取本机地理位置
     std::string GetLocalLocation()
     {

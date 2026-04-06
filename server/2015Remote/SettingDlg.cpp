@@ -97,7 +97,6 @@ BOOL CSettingDlg::OnInitDialog()
     SetDlgItemText(IDC_STATIC_SET_IMG_COMP, _TR("图像压缩方法:"));
     SetDlgItemText(IDC_STATIC_SET_REPORT_INT, _TR("上报间隔:"));
     SetDlgItemText(IDC_STATIC_SET_SW_DETECT, _TR("软件检测:"));
-    SetDlgItemText(IDC_STATIC_SET_PUBLIC_IP, _TR("公网地址:"));
     SetDlgItemText(IDC_STATIC_SET_MULTI_MON, _TR("多显示器支持:"));
     SetDlgItemText(IDC_STATIC_SET_UDP_PARAM, _TR("UDP协议参数:"));
     SetDlgItemText(IDC_STATIC_SET_FRP_PROXY, _TR("FRP 代理:"));
@@ -119,8 +118,34 @@ BOOL CSettingDlg::OnInitDialog()
     SetDlgItemText(IDC_RADIO_ALL_SCREEN, _TR("否"));
     SetDlgItemText(IDC_RADIO_MAIN_SCREEN, _TR("是"));
 
-    m_sPublicIP = THIS_CFG.GetStr("settings", "master", "").c_str();
-    m_sPublicIP = m_sPublicIP.IsEmpty() ? g_2015RemoteDlg->m_IPConverter->getPublicIP().c_str() : m_sPublicIP;
+    // 检测本机 IP 并设置标签和提示
+    std::string localPublicIP, localPrivateIP;
+    g_2015RemoteDlg->m_IPConverter->GetLocalIPs(localPublicIP, localPrivateIP);
+    std::string frpAutoServer = THIS_CFG.GetStr("frp_auto", "server", "");
+    BOOL frpEnabled = THIS_CFG.GetInt("frp", "UseFrp");
+    std::string savedMaster = THIS_CFG.GetStr("settings", "master", "");
+
+    if (!localPublicIP.empty()) {
+        // 场景 1: 本机有公网 IP
+        SetDlgItemText(IDC_STATIC_SET_PUBLIC_IP, _TR("公网地址:"));
+        m_sPublicIP = savedMaster.empty() ? localPublicIP.c_str() : savedMaster.c_str();
+        SetDlgItemText(IDC_STATIC_SET_IP_HINT, _T(""));
+    } else if (!frpAutoServer.empty()) {
+        // 场景 2: 上级配置了 FRP
+        SetDlgItemText(IDC_STATIC_SET_PUBLIC_IP, _TR("公网地址:"));
+        m_sPublicIP = frpAutoServer.c_str();
+        SetDlgItemText(IDC_STATIC_SET_IP_HINT, _T(""));
+    } else if (frpEnabled) {
+        // 场景 3: 启用了本地 FRP（FRP服务器应有公网IP）
+        SetDlgItemText(IDC_STATIC_SET_PUBLIC_IP, _TR("公网地址:"));
+        m_sPublicIP = savedMaster.c_str();
+        SetDlgItemText(IDC_STATIC_SET_IP_HINT, _TR("该地址必须为FRP代理服务器IP"));
+    } else {
+        // 场景 4: 无公网，无 FRP（仅限局域网）
+        SetDlgItemText(IDC_STATIC_SET_PUBLIC_IP, _TR("内网地址:"));
+        m_sPublicIP = savedMaster.empty() ? localPrivateIP.c_str() : savedMaster.c_str();
+        SetDlgItemText(IDC_STATIC_SET_IP_HINT, _TR("跨网使用请配置 FRP 反向代理"));
+    }
     m_sOriginalMaster = m_sPublicIP;  // 缓存原始值，用于检测修改
     std::string nPort = THIS_CFG.GetStr("settings", "ghost", "6543");
     std::map<std::string, std::string> udpMap = { {"UDP", "UDP"}, {"KCP", "KCP"} };
