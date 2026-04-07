@@ -35,12 +35,16 @@ void WriteHash(const char* pwdHash, const char* upperHash) {
 
 std::string getUpperHash()
 {
-    return std::string(g_UpperHash + 100);
+    return std::string(g_UpperHash + 100, 64);
 }
 
 std::string GetUpperHash()
 {
-    return std::string(g_UpperHash + 100).empty() ? GetMasterHash() : g_UpperHash + 100;
+    // Check if upper hash is set (first byte not null)
+    if (g_UpperHash[100] == '\0') {
+        return GetMasterHash();
+    }
+    return std::string(g_UpperHash + 100, 64);
 }
 
 std::string GetPwdHash()
