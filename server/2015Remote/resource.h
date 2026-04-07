@@ -935,13 +935,17 @@
 #define IDC_LIST_FEATURES               2521
 #define IDC_STATIC_FEATURE_TIP          2522
 
+// V2 Authorization 下级并发数限制
+#define IDC_STATIC_AUTH_HOSTNUM         2523
+#define IDC_EDIT_AUTH_HOSTNUM           2524
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        369
 #define _APS_NEXT_COMMAND_VALUE         33040
-#define _APS_NEXT_CONTROL_VALUE         2523
+#define _APS_NEXT_CONTROL_VALUE         2525
 #define _APS_NEXT_SYMED_VALUE           105
 #endif
 #endif

@@ -357,7 +357,7 @@ BOOL IOCPClient::ConnectServer(const char* szServerIP, unsigned short uPort)
 #endif
     }
     m_bConnected = TRUE;
-    Mprintf("连接服务端成功.\n");
+    Mprintf("连接服务端成功: %s:%d.\n", m_sCurIP.c_str(), (int)port);
 
     if (m_hWorkThread == NULL) {
 #ifdef _WIN32

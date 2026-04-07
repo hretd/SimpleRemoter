@@ -515,6 +515,8 @@ CPwdGenDlg::CPwdGenDlg(CWnd* pParent /*=nullptr*/)
     , m_ExpireTm(COleDateTime::GetCurrentTime())
     , m_StartTm(COleDateTime::GetCurrentTime())
     , m_nHostNum(2)
+    , m_nAuthHostNum(2)  // 默认与连接数相同
+    , m_bAuthHostNumManual(FALSE)  // 未手动修改
     , m_bIsLocalDevice(FALSE)
     , m_nVersion(0)
     , m_sPrivateKeyPath(_T(""))
@@ -551,6 +553,10 @@ void CPwdGenDlg::DoDataExchange(CDataExchange* pDX)
     DDX_Control(pDX, IDC_BUTTON_SAVE_LICENSE, m_BtnSaveLicense);
     DDX_Text(pDX, IDC_EDIT_HMAC, m_sHMAC);
     DDX_Text(pDX, IDC_EDIT_AUTHORIZATION, m_sAuthorization);
+    // V2 Authorization 下级并发数
+    DDX_Control(pDX, IDC_EDIT_AUTH_HOSTNUM, m_EditAuthHostNum);
+    DDX_Text(pDX, IDC_EDIT_AUTH_HOSTNUM, m_nAuthHostNum);
+    DDV_MinMaxInt(pDX, m_nAuthHostNum, 2, 10000);
     DDX_Control(pDX, IDC_COMBO_VERSION, m_ComboVersion);
     DDX_Control(pDX, IDC_EDIT_PRIVATEKEY, m_EditPrivateKey);
     DDX_Control(pDX, IDC_BUTTON_BROWSE_KEY, m_BtnBrowseKey);
@@ -574,6 +580,8 @@ BEGIN_MESSAGE_MAP(CPwdGenDlg, CDialogEx)
     ON_BN_CLICKED(IDC_BUTTON_GEN_KEYPAIR, &CPwdGenDlg::OnBnClickedButtonGenKeypair)
     ON_BN_CLICKED(IDC_CHECK_FRP_PROXY, &CPwdGenDlg::OnBnClickedCheckFrpProxy)
     ON_BN_CLICKED(IDC_BTN_FRP_AUTO_PORT, &CPwdGenDlg::OnBnClickedBtnFrpAutoPort)
+    ON_EN_CHANGE(IDC_EDIT_HOSTNUM, &CPwdGenDlg::OnEnChangeEditHostNum)
+    ON_EN_CHANGE(IDC_EDIT_AUTH_HOSTNUM, &CPwdGenDlg::OnEnChangeEditAuthHostNum)
 END_MESSAGE_MAP()
 
 
@@ -617,8 +625,9 @@ void CPwdGenDlg::OnBnClickedButtonGenkey()
         // 多层授权：检查是否有 Authorization + master（公网地址）
         std::string storedAuthObf = THIS_CFG.GetStr("settings", "Authorization", "");
         std::string storedAuth = TcpClient::DeobfuscateAuthorization(storedAuthObf);  // 还原明文
-        std::string masterIP = GetFirstMasterIP(THIS_CFG.GetStr("settings", "master", ""));
-        int masterPort = THIS_CFG.Get1Int("settings", "ghost", ';', 6543);
+        std::string masterIP;
+        int masterPort;
+        CMy2015RemoteDlg::GetEffectiveMasterAddress(masterIP, masterPort);  // 优先使用上级FRP配置
         std::string hmacServer = masterIP.empty() ? "" : masterIP + ":" + std::to_string(masterPort);
         if (!storedAuth.empty() && !hmacServer.empty()) {
             auto authParts = splitString(storedAuth, '|');
@@ -689,9 +698,12 @@ void CPwdGenDlg::OnBnClickedButtonGenkey()
         m_EditHMAC.SetWindowTextA(pwdHmacStr.c_str());
 
         // V2 模式：生成 Authorization（使用 deviceID 计算 snHashPrefix）
+        // Authorization 的并发数限制：使用下级并发数（已自动同步或手动设置）
+        CString authHostNum;
+        authHostNum.Format(_T("%04d"), m_nAuthHostNum);
         // 从 fixedKey 提取 license: "20260317-20270317-0256-..." → "20260317|20270317|0256"
         std::string license = strBeginDate.GetString() + std::string("|") +
-                              strEndDate.GetString() + "|" + hostNum.GetString();
+                              strEndDate.GetString() + "|" + std::string(CT2A(authHostNum));
         std::string snHashPrefix = computeSnHashPrefix(m_sDeviceID.GetString());
         std::string authSig = signAuthorizationV2(license, snHashPrefix, m_sPrivateKeyPath.GetString());
         if (!authSig.empty()) {
@@ -701,7 +713,8 @@ void CPwdGenDlg::OnBnClickedButtonGenkey()
             m_EditAuthorization.SetWindowText(m_sAuthorization);
             GetDlgItem(IDC_STATIC_AUTHORIZATION)->ShowWindow(SW_SHOW);
             GetDlgItem(IDC_EDIT_AUTHORIZATION)->ShowWindow(SW_SHOW);
-            Mprintf("V2 生成 Authorization: %s (snHashPrefix=%s)\n", m_sDeviceID.GetString(), snHashPrefix.c_str());
+            Mprintf("V2 生成 Authorization: %s (snHashPrefix=%s, authHostNum=%s)\n",
+                    m_sDeviceID.GetString(), snHashPrefix.c_str(), CT2A(authHostNum));
         } else {
             m_sAuthorization.Empty();
             m_EditAuthorization.SetWindowText(_T(""));
@@ -747,6 +760,7 @@ BOOL CPwdGenDlg::OnInitDialog()
     SetDlgItemText(IDC_STATIC_KEYGEN_SERIAL, _TR("序列号:"));
     SetDlgItemText(IDC_STATIC_KEYGEN_EXPIRE, _TR("有效期:"));
     SetDlgItemText(IDC_STATIC_KEYGEN_CONN, _TR("连接数:"));
+    SetDlgItemText(IDC_STATIC_AUTH_HOSTNUM, _TR("下级连接数:"));
     SetDlgItemText(IDC_STATIC_KEYGEN_TOKEN, _TR("口  令:"));
     SetDlgItemText(IDC_STATIC_KEYGEN_HMAC_2373, _TR("HMAC:"));
     GetDlgItem(IDC_STATIC_KEYGEN_VERSION)->EnableWindow(GetUpperHash() == GetPwdHash());
@@ -762,11 +776,14 @@ BOOL CPwdGenDlg::OnInitDialog()
 	m_ComboVersion.EnableWindow(GetUpperHash() == GetPwdHash());
     m_nVersion = 0;
 
-    // 初始状态：V1 模式，隐藏私钥控件
+    // 初始状态：V1 模式，隐藏私钥控件和下级并发数
     m_EditPrivateKey.ShowWindow(SW_HIDE);
     m_BtnBrowseKey.ShowWindow(SW_HIDE);
     m_BtnGenKeyPair.ShowWindow(SW_HIDE);
     m_EditUserPwd.ShowWindow(SW_SHOW);
+    // 隐藏下级并发数控件（仅 V2 模式使用）
+    GetDlgItem(IDC_STATIC_AUTH_HOSTNUM)->ShowWindow(SW_HIDE);
+    m_EditAuthHostNum.ShowWindow(SW_HIDE);
 
     // 初始状态禁用保存按钮
     m_BtnSaveLicense.EnableWindow(FALSE);
@@ -827,10 +844,22 @@ void CPwdGenDlg::OnCbnSelchangeComboVersion()
     m_sHMAC.Empty();
     m_sAuthorization.Empty();
     m_BtnSaveLicense.EnableWindow(FALSE);
+    // 重置下级并发数手动标志，并同步当前连接数
+    m_bAuthHostNumManual = FALSE;
+    CString strHostNum;
+    m_EditHostNum.GetWindowText(strHostNum);
+    int hostNum = _ttoi(strHostNum);
+    if (hostNum >= 2) {
+        m_nAuthHostNum = hostNum;
+        CString strAuthHostNum;
+        strAuthHostNum.Format(_T("%d"), m_nAuthHostNum);
+        m_EditAuthHostNum.SetWindowText(strAuthHostNum);
+    }
 
     // 获取"密码"标签控件和"授权"控件
     CWnd* pLabel = GetDlgItem(IDC_STATIC_PWD_LABEL);
     CWnd* pAuthLabel = GetDlgItem(IDC_STATIC_AUTHORIZATION);
+    CWnd* pAuthHostNumLabel = GetDlgItem(IDC_STATIC_AUTH_HOSTNUM);
 
     if (m_nVersion == 0) {
         // V1 (HMAC) 模式：显示密码输入框，隐藏私钥相关控件
@@ -839,6 +868,9 @@ void CPwdGenDlg::OnCbnSelchangeComboVersion()
         m_BtnBrowseKey.ShowWindow(SW_HIDE);
         m_BtnGenKeyPair.ShowWindow(SW_HIDE);
         if (pLabel) pLabel->SetWindowText(_TR("密  码:"));
+        // V1 模式隐藏下级并发数
+        if (pAuthHostNumLabel) pAuthHostNumLabel->ShowWindow(SW_HIDE);
+        m_EditAuthHostNum.ShowWindow(SW_HIDE);
     } else {
         // V2 (ECDSA) 模式：隐藏密码输入框，显示私钥相关控件
         m_EditUserPwd.ShowWindow(SW_HIDE);
@@ -846,6 +878,9 @@ void CPwdGenDlg::OnCbnSelchangeComboVersion()
         m_BtnBrowseKey.ShowWindow(SW_SHOW);
         m_BtnGenKeyPair.ShowWindow(SW_SHOW);
         if (pLabel) pLabel->SetWindowText(_TR("私  钥:"));
+        // V2 模式显示下级并发数
+        if (pAuthHostNumLabel) pAuthHostNumLabel->ShowWindow(SW_SHOW);
+        m_EditAuthHostNum.ShowWindow(SW_SHOW);
 
         // 如果已有有效私钥，禁用浏览和生成按钮，私钥路径只读
         std::string v2Key = THIS_CFG.GetStr("settings", "V2PrivateKey", "");
@@ -853,6 +888,37 @@ void CPwdGenDlg::OnCbnSelchangeComboVersion()
         m_BtnBrowseKey.EnableWindow(!hasValidKey);
         m_BtnGenKeyPair.EnableWindow(!hasValidKey);
         m_EditPrivateKey.SetReadOnly(hasValidKey);
+    }
+}
+
+void CPwdGenDlg::OnEnChangeEditHostNum()
+{
+    // 如果下级并发数未手动修改，则跟随连接数变化
+    if (!m_bAuthHostNumManual && m_nVersion == 1) {  // 仅 V2 模式需要同步
+        CString strHostNum;
+        m_EditHostNum.GetWindowText(strHostNum);
+        int hostNum = _ttoi(strHostNum);
+        if (hostNum >= 2) {
+            m_nAuthHostNum = hostNum;
+            CString strAuthHostNum;
+            strAuthHostNum.Format(_T("%d"), m_nAuthHostNum);
+            m_EditAuthHostNum.SetWindowText(strAuthHostNum);
+        }
+    }
+}
+
+void CPwdGenDlg::OnEnChangeEditAuthHostNum()
+{
+    // 检测是否为用户手动修改（而非程序同步）
+    // 通过比较当前值与连接数来判断
+    CString strAuthHostNum;
+    m_EditAuthHostNum.GetWindowText(strAuthHostNum);
+    CString strHostNum;
+    m_EditHostNum.GetWindowText(strHostNum);
+
+    // 如果两个值不同，说明用户手动修改了
+    if (strAuthHostNum != strHostNum && !strAuthHostNum.IsEmpty()) {
+        m_bAuthHostNumManual = TRUE;
     }
 }
 

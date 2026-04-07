@@ -124,6 +124,14 @@ public:
     CEdit m_EditAuthorization;  // 多层授权显示框
     CString m_sAuthorization;  // 多层授权: Authorization 字段
 
+    // V2 Authorization 下级并发数限制
+    CEdit m_EditAuthHostNum;    // 下级并发数输入框
+    int m_nAuthHostNum;         // 下级并发数值
+    BOOL m_bAuthHostNumManual;  // 是否手动修改过
+
+    afx_msg void OnEnChangeEditHostNum();      // 连接数变化时同步
+    afx_msg void OnEnChangeEditAuthHostNum();  // 下级并发数手动修改
+
     // V2 授权相关
     CComboBox m_ComboVersion;   // 版本选择下拉框
     CEdit m_EditPrivateKey;     // 私钥文件路径

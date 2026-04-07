@@ -4,6 +4,7 @@
 #include "stdafx.h"
 #include "2015Remote.h"
 #include "BuildDlg.h"
+#include "2015RemoteDlg.h"
 #include "afxdialogex.h"
 #include <io.h>
 #include "InputDlg.h"
@@ -714,20 +715,12 @@ BOOL CBuildDlg::OnInitDialog()
     }
     SubMenu->CheckMenuItem(ID_RANDOM_NAME, b ? MF_CHECKED : MF_UNCHECKED);
 
-    // 初始化默认 IP 和端口
-    std::string frpAutoServer = THIS_CFG.GetStr("frp_auto", "server", "");
-    if (!frpAutoServer.empty()) {
-        // 使用上级分配的 FRP 配置
-        m_strIP = frpAutoServer.c_str();
-        int frpRemotePort = THIS_CFG.GetInt("frp_auto", "remotePort", 0);
-        if (frpRemotePort > 0) {
-            m_strPort.Format("%d", frpRemotePort);
-        }
-    } else {
-        // 使用本机配置
-        m_strIP = THIS_CFG.GetStr("settings", "master", "").c_str();
-        m_strPort = THIS_CFG.GetStr("settings", "ghost", "6543").c_str();
-    }
+    // 初始化默认 IP 和端口（优先使用上级FRP配置）
+    std::string effectiveIP;
+    int effectivePort;
+    CMy2015RemoteDlg::GetEffectiveMasterAddress(effectiveIP, effectivePort);
+    m_strIP = effectiveIP.c_str();
+    m_strPort.Format("%d", effectivePort);
     UpdateData(FALSE);
 
     return TRUE;  // return TRUE unless you set the focus to a control
