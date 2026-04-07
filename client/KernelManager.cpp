@@ -605,12 +605,14 @@ std::string getHardwareIDByCfg(const std::string& pwdHash, const std::string& ma
 #else
     m_iniFile = new iniFile;
 #endif
-    int version = m_iniFile->GetInt("settings", "BindType", 0);
+    int bindType = m_iniFile->GetInt("settings", "BindType", 0);
+    int hwVersion = m_iniFile->GetInt("settings", "HWIDVersion", 0);
     std::string master = m_iniFile->GetStr("settings", "master");
     SAFE_DELETE(m_iniFile);
-    switch (version) {
+    switch (bindType) {
     case 0:
-        return getHardwareID();
+        // Check HWIDVersion: 2 = V2 (with UUID+MachineGuid), else V1
+        return hwVersion == 2 ? getHardwareID_V2() : getHardwareID();
     case 1: {
         if (!master.empty()) {
             return master;
