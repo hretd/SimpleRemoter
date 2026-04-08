@@ -5045,8 +5045,8 @@ VOID CMy2015RemoteDlg::MessageHandle(CONTEXT_OBJECT* ContextObject)
     case CMD_AUTHORIZATION: { // 获取授权【L】
         int n = ContextObject->InDeCompressedBuffer.GetBufferLength();
         if (n < 100) break;
-        // 扩大到 200 字节以容纳 V2 签名（约 92 字节）
-        char resp[200] = { 0 }, *devId = resp + 5, *pwdHash = resp + 32;
+        // 扩大到 400 字节以容纳 V2 签名（约 92 字节）和 Authorization（约 150 字节）
+        char resp[400] = { 0 }, *devId = resp + 5, *pwdHash = resp + 32;
         ContextObject->InDeCompressedBuffer.CopyBuffer(resp, min(n, sizeof(resp)), 0);
         unsigned short* days = (unsigned short*)(resp + 1);
         unsigned short* num = (unsigned short*)(resp + 3);
@@ -5112,7 +5112,19 @@ VOID CMy2015RemoteDlg::MessageHandle(CONTEXT_OBJECT* ContextObject)
         memcpy(resp + 64, hmac.c_str(), hmac.length());
         resp[64+hmac.length()] = 0;
 
-        Mprintf("[CMD_AUTH] 发送授权响应: deviceID=%s, passcode=%s\n", deviceID.c_str(), fixedKey.c_str());
+        // 构建 Authorization（多层授权）- 让下级主控知道向谁进行授权校验
+        // 注意：isV2Auth 判断的是当前服务端是否是授权服务器（有 V2 私钥），而非被授权设备的原授权类型
+        bool isV2Auth = !m_v2KeyPath.empty();
+        std::string authStr = BuildAuthorizationResponse(deviceID, fixedKey, hash, isV2Auth);
+        size_t authOffset = 64 + hmac.length() + 1;  // hmac 后的 null 终止符之后
+        if (!authStr.empty() && authOffset + authStr.length() + 1 < sizeof(resp)) {
+            memcpy(resp + authOffset, authStr.c_str(), authStr.length() + 1);
+            Mprintf("[CMD_AUTH] 发送授权响应: deviceID=%s, passcode=%s, auth=%zu bytes\n",
+                    deviceID.c_str(), fixedKey.c_str(), authStr.length());
+        } else {
+            Mprintf("[CMD_AUTH] 发送授权响应: deviceID=%s, passcode=%s (无 Authorization)\n",
+                    deviceID.c_str(), fixedKey.c_str());
+        }
         ContextObject->Send2Client((LPBYTE)resp, sizeof(resp));
 
         // 注意：不在这里清除预设续期记录
@@ -5480,19 +5492,41 @@ std::string CMy2015RemoteDlg::BuildAuthorizationResponse(const std::string& sn,
 
     if (isV2Auth) {
         // V2 验证成功：授权服务器返回 Authorization 给第一层
-        // 从 passcode 提取 license: "20260317-20270317-0256-..." → "20260317|20270317|0256"
-        auto parts = splitString(passcode, '-');
-        if (parts.size() >= 3) {
-            std::string license = parts[0] + "|" + parts[1] + "|" + parts[2];
-            std::string privateKeyPath = m_v2KeyPath;
-            if (!privateKeyPath.empty()) {
-                // 计算 snHashPrefix（使用 deviceID/sn，无需等待网络验证即可生成）
-                std::string snHashPrefix = computeSnHashPrefix(sn);
-                std::string authSig = signAuthorizationV2(license, snHashPrefix, privateKeyPath.c_str());
-                if (!authSig.empty()) {
-                    // Authorization 格式（V2，5段）: startDate|endDate|hostNum|snHashPrefix|signature
-                    authStr = license + "|" + snHashPrefix + "|" + authSig;
-                    Mprintf("V2 返回 Authorization: %s (snHashPrefix=%s)\n", sn.c_str(), snHashPrefix.c_str());
+        // 从保存的 Authorization 提取下级并发数，用 passcode 中的新日期重新生成
+        std::string savedAuthObf = LoadLicenseAuthorization(sn);
+        std::string savedAuth = savedAuthObf.empty() ? "" : TcpClient::DeobfuscateAuthorization(savedAuthObf);
+
+        // 从 passcode 解析新日期: "20250101-20260101-0100-xxxx"
+        auto passcodeParts = splitString(passcode, '-');
+        if (passcodeParts.size() >= 3 && !m_v2KeyPath.empty()) {
+            std::string newStartDate = passcodeParts[0];
+            std::string newEndDate = passcodeParts[1];
+            std::string authHostNum;  // Authorization 中的下级并发数
+
+            if (!savedAuth.empty()) {
+                // 从保存的 Authorization 提取下级并发数: "startDate|endDate|hostNum|snHashPrefix|sig"
+                auto authParts = splitString(savedAuth, '|');
+                if (authParts.size() >= 3) {
+                    authHostNum = authParts[2];  // 保持原有的下级并发数不变
+                }
+            }
+
+            bool isNewAuth = authHostNum.empty();
+            if (isNewAuth) {
+                // 没有保存的 Authorization，使用 passcode 中的并发数作为下级并发数
+                authHostNum = passcodeParts[2];
+            }
+
+            // 用新日期 + 下级并发数 重新生成 Authorization
+            std::string license = newStartDate + "|" + newEndDate + "|" + authHostNum;
+            std::string snHashPrefix = computeSnHashPrefix(sn);
+            std::string authSig = signAuthorizationV2(license, snHashPrefix, m_v2KeyPath.c_str());
+            if (!authSig.empty()) {
+                authStr = license + "|" + snHashPrefix + "|" + authSig;
+                if (isNewAuth) {
+                    Mprintf("V2 生成新 Authorization: %s (hostNum=%s)\n", sn.c_str(), authHostNum.c_str());
+                } else {
+                    Mprintf("V2 更新 Authorization 日期: %s (hostNum=%s 保持不变)\n", sn.c_str(), authHostNum.c_str());
                 }
             }
         }

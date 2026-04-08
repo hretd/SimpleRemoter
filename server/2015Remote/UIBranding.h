@@ -44,7 +44,7 @@
 
 // 程序版本号 [建议格式: X.Y.Z]
 // 影响：关于对话框、标题栏
-#define BRAND_VERSION           "1.2.9"
+#define BRAND_VERSION           "1.3.0"
 
 // 启动画面名称 [建议大写，更有 Logo 感]
 // 影响：启动画面 Logo 文字（大号艺术字体渲染）

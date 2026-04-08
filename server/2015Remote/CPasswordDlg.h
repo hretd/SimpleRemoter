@@ -75,6 +75,8 @@ bool LoadLicenseInfo(const std::string& deviceID, std::string& passcode,
                      std::string& hmac, std::string& remark);
 // 加载授权的 FRP 配置
 std::string LoadLicenseFrpConfig(const std::string& deviceID);
+// 加载授权的 Authorization（用于 V2 授权返回给第一层）
+std::string LoadLicenseAuthorization(const std::string& deviceID);
 // 更新授权活跃信息（IP、位置、最后活跃时间）
 // 如果授权不存在则自动创建记录
 // machineName: 机器名，用于区分同一公网IP下的不同机器

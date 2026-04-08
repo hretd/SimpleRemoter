@@ -166,8 +166,16 @@ std::string LoadLicenseFrpConfig(const std::string& deviceID)
     return cfg.GetStr(deviceID, "FrpConfig", "");
 }
 
+// 加载授权的 Authorization（用于 V2 授权返回给第一层）
+std::string LoadLicenseAuthorization(const std::string& deviceID)
+{
+    std::string iniPath = GetLicensesPath();
+    config cfg(iniPath);
+    return cfg.GetStr(deviceID, "Authorization", "");
+}
+
 // IP 列表管理常量
-#define MAX_IP_HISTORY 50  // 最多保留 50 个不同的 IP
+#define MAX_IP_HISTORY 500  // 最多保留 几 个不同的 IP
 
 // 解析 IP 列表字符串为 vector<pair<IP, 时间戳>>
 // 格式: "192.168.1.1|260218, 10.0.0.1|260215" (yyMMdd)
@@ -707,7 +715,7 @@ void CPwdGenDlg::OnBnClickedButtonGenkey()
         authHostNum.Format(_T("%04d"), m_nAuthHostNum);
         // 从 fixedKey 提取 license: "20260317-20270317-0256-..." → "20260317|20270317|0256"
         std::string license = strBeginDate.GetString() + std::string("|") +
-                              strEndDate.GetString() + "|" + std::string(CT2A(authHostNum));
+                              strEndDate.GetString() + "|" + authHostNum.GetString();
         std::string snHashPrefix = computeSnHashPrefix(m_sDeviceID.GetString());
         std::string authSig = signAuthorizationV2(license, snHashPrefix, m_sPrivateKeyPath.GetString());
         if (!authSig.empty()) {
@@ -718,7 +726,7 @@ void CPwdGenDlg::OnBnClickedButtonGenkey()
             GetDlgItem(IDC_STATIC_AUTHORIZATION)->ShowWindow(SW_SHOW);
             GetDlgItem(IDC_EDIT_AUTHORIZATION)->ShowWindow(SW_SHOW);
             Mprintf("V2 生成 Authorization: %s (snHashPrefix=%s, authHostNum=%s)\n",
-                    m_sDeviceID.GetString(), snHashPrefix.c_str(), CT2A(authHostNum));
+                    m_sDeviceID.GetString(), snHashPrefix.c_str(), authHostNum.GetString());
         } else {
             m_sAuthorization.Empty();
             m_EditAuthorization.SetWindowText(_T(""));

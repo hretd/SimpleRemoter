@@ -277,22 +277,58 @@ struct FileChunkPacketV2 {
 
 ## Architecture
 
-![Architecture](https://github.com/yuanyuanxiang/SimpleRemoter/wiki/res/Architecture.jpg)
-
-### Two-Layer Control Architecture (v1.1.1+)
-
 ```
-Super User
-    │
-    ├── Master 1 ──> Client Group A (up to 10,000+)
-    ├── Master 2 ──> Client Group B
-    └── Master 3 ──> Client Group C
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      Multi-Layer Authorization Architecture                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│                          ┌─────────────────────┐                            │
+│                          │    Super Admin      │                            │
+│                          │ (Authorization      │                            │
+│                          │     Server)         │                            │
+│                          └─────────┬───────────┘                            │
+│                                    │                                         │
+│                     ┌──────────────┼──────────────┐                         │
+│                     │ V2 License   │ V2 License   │ V2 License              │
+│                     │ (ECDSA)      │ (ECDSA)      │ (ECDSA)                  │
+│                     ▼              ▼              ▼                          │
+│             ┌───────────┐  ┌───────────┐  ┌───────────┐                     │
+│             │ Layer-1 A │  │ Layer-1 B │  │ Layer-1 C │  ◄── Independent    │
+│             │           │  │           │  │           │      & Isolated     │
+│             └─────┬─────┘  └─────┬─────┘  └─────┬─────┘                     │
+│                   │              │              │                            │
+│          ┌────────┴────────┐     │       ┌──────┴──────┐                    │
+│          │ V1 License      │     │       │ V1 License  │                    │
+│          ▼                 ▼     ▼       ▼             ▼                    │
+│    ┌──────────┐     ┌──────────┐ ...  ┌──────────┐  ┌──────────┐           │
+│    │ Sub A1   │     │ Sub A2   │      │ Sub C1   │  │ Sub C2   │           │
+│    │ Master   │     │ Master   │      │ Master   │  │ Master   │           │
+│    └────┬─────┘     └────┬─────┘      └────┬─────┘  └────┬─────┘           │
+│         │                │                 │             │                  │
+│         ▼                ▼                 ▼             ▼                  │
+│    ┌─────────┐     ┌─────────┐       ┌─────────┐   ┌─────────┐             │
+│    │ Clients │     │ Clients │       │ Clients │   │ Clients │             │
+│    │ 10,000+ │     │ 10,000+ │       │ 10,000+ │   │ 10,000+ │             │
+│    └─────────┘     └─────────┘       └─────────┘   └─────────┘             │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  License Type    Verification             Features                           │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  V2 License      ECDSA P-256 Signature    Offline verify, connection limits  │
+│  V1 License      HMAC + Online Verify     Connects to upstream server        │
+│  Trial           Online Verify            Limited features, always connected │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Design Advantages**:
-- **Hierarchical Control**: Super user can manage any master program
-- **Isolation**: Clients managed by different masters are isolated from each other
-- **Horizontal Scaling**: 10 Masters × 10,000 clients = 100,000 devices
+### Architecture Advantages
+
+| Feature | Description |
+|---------|-------------|
+| **Hierarchical Control** | Super user manages any master, supports unlimited tiers |
+| **Complete Isolation** | Different Layer-1 users have isolated licenses, data, and clients |
+| **Independent Operation** | Layer-1 users can set pricing, issue licenses, build their brand |
+| **Horizontal Scaling** | Single master supports 10,000+ clients, multi-layer scales to millions |
+| **Offline Support** | V2 license supports full offline verification, no upstream dependency |
 
 ### Master Program (Server)
 
@@ -440,6 +476,39 @@ make
 ---
 
 ## Changelog
+
+### v1.3.0 (2026.4.8)
+
+**Multi-Tier FRP Architecture & UI Branding**
+
+**New Features:**
+- Local FRPS server support (64-bit only): Built-in FRP server for simplified deployment
+- Multi-tier architecture automatic FRP integration: Downstream masters auto-acquire upstream FRP config
+- V2 authorization downstream connection limit: Control concurrent connections for downstream
+- License file import/export support (.lic format)
+- Expired authorization renewal support: No need to regenerate license
+- Enhanced hardware ID (V2): Fix VPS duplicate SN issue
+- MaxDepth control: Limit hierarchical master depth level
+- License management enhancements: Quota support, dynamic dialog, delete functionality
+- IP geolocation API multi-provider fallback: Improved location success rate
+- UI branding customization: Support custom program name, logo, copyright, etc.
+- Runtime feature limits: Configurable trial version restrictions
+- Input history dropdown: Quick selection of previous inputs
+- Client generation new options: More customization settings
+- Dynamic project links: Change help/feedback URLs without recompiling
+
+**Bug Fixes:**
+- Fixed Use-after-free crash in RebuildFilteredIndices
+- Fixed IOCP race condition crash in CLock::Lock (#215)
+- Fixed crash protection service cleanup and agent elevation issue
+- Fixed potential crash from unlimited message log growth
+- Fixed UpperHash string length issue after FeatureFlags introduction
+- Fixed client SN generation to support HWIDVersion setting
+
+**Improvements:**
+- Restructured res/ directory with menu icons
+- Expired passwords no longer auto-cleared
+- Maintain stable connection between downstream and Layer-1 master
 
 ### v1.0.2.9 (2026.3.27)
 

