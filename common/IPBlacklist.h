@@ -95,7 +95,7 @@ public:
         return result;
     }
 
-    // 检查是否应该记录日志（防刷频，同一 IP 每 60 秒最多记录一次）
+    // 检查是否应该记录日志（防刷频，同一 IP 每 300 秒最多记录一次）
     bool ShouldLog(const std::string& ip) {
         AutoLock lock(m_Lock);
         time_t now = time(nullptr);
@@ -113,7 +113,7 @@ public:
         }
 
         auto it = m_LastLogTime.find(ip);
-        if (it == m_LastLogTime.end() || (now - it->second) >= 60) {
+        if (it == m_LastLogTime.end() || (now - it->second) >= 300) {
             m_LastLogTime[ip] = now;
             return true;
         }
