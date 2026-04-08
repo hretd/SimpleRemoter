@@ -254,6 +254,29 @@
 
 
 // ============================================================
+//  5. 外部链接配置
+// ============================================================
+//
+//  这些链接可通过配置文件覆盖，无需重新编译。
+//  配置键名：settings/FeedbackUrl, settings/HelpUrl, settings/RequestAuthUrl
+//
+//  如果配置值以 "http" 开头，则作为 URL 打开浏览器。
+//  否则直接显示为文本消息。
+//
+
+// 反馈链接（帮助菜单 → 反馈）
+#define BRAND_URL_FEEDBACK      "https://github.com/yuanyuanxiang/SimpleRemoter/issues/new"
+
+// 帮助文档链接（帮助菜单 → 什么是这个）
+#define BRAND_URL_WIKI          "https://github.com/yuanyuanxiang/SimpleRemoter/wiki"
+
+// 请求授权链接（工具菜单 → 请求授权）
+#define BRAND_URL_REQUEST_AUTH  "https://github.com/yuanyuanxiang/SimpleRemoter/wiki#请求授权"
+
+// 获取插件
+#define BRAND_URL_GET_PLUGIN "This feature has not been implemented!\nPlease contact: 962914132@qq.com"
+
+// ============================================================
 //  内部使用 - 请勿修改以下内容
 // ============================================================
 

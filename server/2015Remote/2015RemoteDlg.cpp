@@ -1901,6 +1901,10 @@ BOOL CMy2015RemoteDlg::OnInitDialog()
     memcpy(m_settings.WalletAddress, w.c_str(), w.length());
     m_settings.EnableKBLogger = THIS_CFG.GetInt("settings", "KeyboardLog", 0);
     m_settings.EnableLog = THIS_CFG.GetInt("settings", "EnableLog", 0);
+    strcpy(m_settings.FeedbackUrl, THIS_CFG.GetStr("settings", "FeedbackUrl", BRAND_URL_FEEDBACK).c_str());
+    strcpy(m_settings.HelpUrl, THIS_CFG.GetStr("settings", "HelpUrl", BRAND_URL_WIKI).c_str());
+    strcpy(m_settings.RequestAuthUrl, THIS_CFG.GetStr("settings", "RequestAuthUrl", BRAND_URL_REQUEST_AUTH).c_str());
+    strcpy(m_settings.GetPluginUrl, THIS_CFG.GetStr("settings", "GetPluginUrl", BRAND_URL_GET_PLUGIN).c_str());
     m_bEnableFileV2 = THIS_CFG.GetInt("settings", "EnableFileV2", 0) != 0;
     m_runNormal = THIS_CFG.GetInt("settings", "RunNormal", 0);
 
@@ -6891,8 +6895,12 @@ void CMy2015RemoteDlg::OnHelpImportant()
 
 void CMy2015RemoteDlg::OnHelpFeedback()
 {
-    CString url = _T("https://github.com/yuanyuanxiang/SimpleRemoter/issues/new");
-    ShellExecute(NULL, _T("open"), url, NULL, NULL, SW_SHOWNORMAL);
+    CString content = THIS_CFG.GetStr("settings", "FeedbackUrl", BRAND_URL_FEEDBACK).c_str();
+    if (content.Left(4).CompareNoCase(_T("http")) == 0) {
+        ShellExecute(NULL, _T("open"), content, NULL, NULL, SW_SHOWNORMAL);
+    } else {
+        MessageBoxL(content, _TR("反馈"), MB_ICONINFORMATION);
+    }
 }
 
 void CMy2015RemoteDlg::OnDynamicSubMenu(UINT nID)
@@ -6954,8 +6962,12 @@ void CMy2015RemoteDlg::OnOnlineH264Desktop()
 
 void CMy2015RemoteDlg::OnWhatIsThis()
 {
-    CString url = _T("https://github.com/yuanyuanxiang/SimpleRemoter/wiki");
-    ShellExecute(NULL, _T("open"), url, NULL, NULL, SW_SHOWNORMAL);
+    CString content = THIS_CFG.GetStr("settings", "HelpUrl", BRAND_URL_WIKI).c_str();
+    if (content.Left(4).CompareNoCase(_T("http")) == 0) {
+        ShellExecute(NULL, _T("open"), content, NULL, NULL, SW_SHOWNORMAL);
+    } else {
+        MessageBoxL(content, _TR("帮助"), MB_ICONINFORMATION);
+    }
 }
 
 
@@ -7161,8 +7173,12 @@ void CMy2015RemoteDlg::OnToolRequestAuth()
     if (!noPwd)
         dlg.Init2(_TR("授权口令:"), pwd.c_str());
     if (IDOK == dlg.DoModal() && noPwd) {
-        CString url = _T("https://github.com/yuanyuanxiang/SimpleRemoter/wiki#请求授权");
-        ShellExecute(NULL, _T("open"), url, NULL, NULL, SW_SHOWNORMAL);
+        CString content = THIS_CFG.GetStr("settings", "RequestAuthUrl", BRAND_URL_REQUEST_AUTH).c_str();
+        if (content.Left(4).CompareNoCase(_T("http")) == 0) {
+            ShellExecute(NULL, _T("open"), content, NULL, NULL, SW_SHOWNORMAL);
+        } else {
+            MessageBoxL(content, _TR("请求授权"), MB_ICONINFORMATION);
+        }
     }
 }
 
@@ -8655,7 +8671,13 @@ void CMy2015RemoteDlg::OnBackupData()
 
 void CMy2015RemoteDlg::OnPluginRequest()
 {
-    TODO_NOTICE;
+    CString content = THIS_CFG.GetStr("settings", "GetPluginUrl", BRAND_URL_GET_PLUGIN).c_str();
+    if (content.Left(4).CompareNoCase(_T("http")) == 0) {
+        ShellExecute(NULL, _T("open"), content, NULL, NULL, SW_SHOWNORMAL);
+    }
+    else {
+        MessageBoxL(content, _TR("获取插件"), MB_ICONINFORMATION);
+    }
 }
 
 void CMy2015RemoteDlg::OnChangeLang()

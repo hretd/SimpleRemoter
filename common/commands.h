@@ -992,7 +992,11 @@ typedef struct MasterSettings {
     int         EnableKBLogger;             // Since 2025-11-27
     int         EnableLog;                  // Since 2025-12-17
     char        Signature[64];              // Since 2026-02-05
-    char        Reserved[428];              // Since 2025-11-27
+    char        FeedbackUrl[80];            // Since 2026-04-08
+    char        HelpUrl[80];                // Since 2026-04-08
+    char        RequestAuthUrl[80];         // Since 2026-04-08
+    char        GetPluginUrl[80];           // Since 2026-04-08
+    char        Reserved[108];              // Since 2025-11-27
 } MasterSettings;
 #pragma pack(pop)
 
