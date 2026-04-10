@@ -977,8 +977,11 @@ typedef struct HeartbeatACK {
     uint64_t Time;
     char Authorized;
     char IsTrail;
-    char Reserved[22];
+    char Authorization[200];
+    char Reserved[814];
 } HeartbeatACK;
+
+#define HeartbeatACK_OldSize 32
 
 #pragma pack(push, 4)
 // 固定500字节

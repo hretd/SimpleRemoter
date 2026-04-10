@@ -321,10 +321,10 @@ public:
     FrpAutoConfig m_frpAutoConfig;
     int m_frpAutoStatus = STATUS_UNKNOWN;  // FRP 自动代理状态
     HANDLE m_hFrpAutoThread = NULL;        // FRP 自动代理线程句柄
-    static FrpAutoConfig ParseFrpAutoConfig(const std::string& config);
+    static FrpAutoConfig ParseFrpAutoConfig(const std::string& config, bool heartbeat=false);
     // 获取有效的主控地址（优先使用上级FRP配置）
     // 返回值：是否使用了FRP地址
-    static bool GetEffectiveMasterAddress(std::string& outIP, int& outPort);
+    static bool GetEffectiveMasterAddress(std::string& outIP, int& outPort, bool heartbeat=false);
     void StartFrpcAuto(const FrpAutoConfig& cfg);
     void StopFrpcAuto();
     void InitFrpcAuto();  // 启动时自动恢复

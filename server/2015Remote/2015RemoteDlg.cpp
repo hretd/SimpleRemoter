@@ -2344,7 +2344,7 @@ void CMy2015RemoteDlg::StopLocalFrpsServer()
 // 输入格式: serverAddr:serverPort-remotePort-expireDate-privilegeKey
 // 示例: frp.example.com:7000-20080-20260323-a1b2c3d4... (自定义FRP: 32字符 privilegeKey)
 // 示例: frp.example.com:7000-20080-20260323-ENC:xxx     (官方FRP: 编码的 token)
-CMy2015RemoteDlg::FrpAutoConfig CMy2015RemoteDlg::ParseFrpAutoConfig(const std::string& config)
+CMy2015RemoteDlg::FrpAutoConfig CMy2015RemoteDlg::ParseFrpAutoConfig(const std::string& config, bool heartbeat)
 {
     FrpAutoConfig cfg;
     if (config.empty()) return cfg;
@@ -2426,7 +2426,8 @@ CMy2015RemoteDlg::FrpAutoConfig CMy2015RemoteDlg::ParseFrpAutoConfig(const std::
         Mprintf("[FRP-Auto] 配置无效: server=%s, remotePort=%d\n",
                 cfg.serverAddr.c_str(), cfg.remotePort);
     } else {
-        Mprintf("[FRP-Auto] 配置解析成功: server=%s:%d, remotePort=%d, mode=%s\n",
+        if(!heartbeat) 
+            Mprintf("[FRP-Auto] 配置解析成功: server=%s:%d, remotePort=%d, mode=%s\n",
                 cfg.serverAddr.c_str(), cfg.serverPort, cfg.remotePort,
                 cfg.isEncodedToken ? "官方FRP(token)" : "自定义FRP(privilegeKey)");
     }
@@ -2436,7 +2437,7 @@ CMy2015RemoteDlg::FrpAutoConfig CMy2015RemoteDlg::ParseFrpAutoConfig(const std::
 
 // 获取有效的主控地址（优先使用上级FRP配置）
 // 返回值：是否使用了FRP地址
-bool CMy2015RemoteDlg::GetEffectiveMasterAddress(std::string& outIP, int& outPort)
+bool CMy2015RemoteDlg::GetEffectiveMasterAddress(std::string& outIP, int& outPort, bool heartbeat)
 {
     // 默认使用本地配置
     outIP = THIS_CFG.GetStr("settings", "master", "");
@@ -2446,7 +2447,7 @@ bool CMy2015RemoteDlg::GetEffectiveMasterAddress(std::string& outIP, int& outPor
     // 检查是否有上级 FRP 配置
     std::string frpConfigStr = THIS_CFG.GetStr("settings", "FrpConfig", "");
     if (!frpConfigStr.empty()) {
-        FrpAutoConfig frpCfg = ParseFrpAutoConfig(frpConfigStr);
+        FrpAutoConfig frpCfg = ParseFrpAutoConfig(frpConfigStr, heartbeat);
         if (frpCfg.enabled && frpCfg.remotePort > 0) {
             outIP = frpCfg.serverAddr;
             outPort = frpCfg.remotePort;
@@ -2869,7 +2870,7 @@ void CMy2015RemoteDlg::OnSize(UINT nType, int cx, int cy)
         // 4个分区：消息(自动拉伸)、FRP地址(250px)、运行统计(180px)、到期时间(180px)
         int paneExpire = m_strExpireDate.IsEmpty() ? 0 : 180;  // 无到期信息时隐藏
         // 优先显示上级 FRPC，其次显示本机 FRPS
-        bool hasFrpDisplay = !m_strFrpAddr.IsEmpty() || CFrpsForSubDlg::IsFrpsConfigured();
+        bool hasFrpDisplay = !m_strFrpAddr.IsEmpty() || CFrpsForSubDlg::IsFrpsConfigured() || m_settings.UsingFRPProxy;
         int paneFrp = hasFrpDisplay ? 250 : 0;
         int paneRuntime = 180;
         int paneMsg = max(0, cx - paneFrp - paneRuntime - paneExpire - 20);
@@ -3170,6 +3171,10 @@ void CMy2015RemoteDlg::UpdateStatusBarStats()
             } else {
                 strFrpDisplay.Format(_T("FRPS %hs:%d"), frpsCfg.server.c_str(), frpsCfg.port);
             }
+        }
+        else if (m_settings.UsingFRPProxy) {
+            strFrpDisplay.Format(_T("%s:%d"), THIS_CFG.GetStr("settings", "master").c_str(), 
+                THIS_CFG.Get1Int("settings", "ghost"));
         }
     }
     // 根据是否有内容设置分区宽度
@@ -4658,7 +4663,7 @@ VOID CMy2015RemoteDlg::MessageHandle(CONTEXT_OBJECT* ContextObject)
         }
 
         // 构建响应：[valid:4][message\0][authorization\0][renewal_passcode\0][renewal_hmac\0][frp_config\0][reserved\0]
-        char resp[400] = { 0 };  // 增加缓冲区大小以容纳 frpConfig
+        char resp[800] = { 0 };  // 增加缓冲区大小以容纳 frpConfig
         memcpy(resp, &valid, sizeof(valid));
         std::string msgStr = valid ? _TR("此程序已获授权，请遵守授权协议，感谢合作") : _TR("未获授权或消息哈希校验失败，可能有使用限制");
         // 版本比较：如果服务端版本更高或客户端未上报版本，追加升级提醒
@@ -5507,10 +5512,13 @@ std::string CMy2015RemoteDlg::BuildAuthorizationResponse(const std::string& sn,
             std::string newEndDate = passcodeParts[1];
             std::string authHostNum;  // Authorization 中的下级并发数
 
+            std::string savedStartDate, savedEndDate;
             if (!savedAuth.empty()) {
                 // 从保存的 Authorization 提取下级并发数: "startDate|endDate|hostNum|snHashPrefix|sig"
                 auto authParts = splitString(savedAuth, '|');
                 if (authParts.size() >= 3) {
+                    savedStartDate = authParts[0];
+                    savedEndDate = authParts[1];
                     authHostNum = authParts[2];  // 保持原有的下级并发数不变
                 }
             }
@@ -5521,55 +5529,36 @@ std::string CMy2015RemoteDlg::BuildAuthorizationResponse(const std::string& sn,
                 authHostNum = passcodeParts[2];
             }
 
+            // 检查日期是否变化
+            bool dateChanged = isNewAuth || (newStartDate != savedStartDate) || (newEndDate != savedEndDate);
+            if (!dateChanged) {
+                // 日期未变化，直接返回已保存的 Authorization
+                return savedAuthObf;
+            }
+
             // 用新日期 + 下级并发数 重新生成 Authorization
             std::string license = newStartDate + "|" + newEndDate + "|" + authHostNum;
             std::string snHashPrefix = computeSnHashPrefix(sn);
             std::string authSig = signAuthorizationV2(license, snHashPrefix, m_v2KeyPath.c_str());
             if (!authSig.empty()) {
                 authStr = license + "|" + snHashPrefix + "|" + authSig;
+                // 保存更新后的 Authorization 到 license.ini
+                std::string authObfuscated = TcpClient::ObfuscateAuthorization(authStr);
+                UpdateLicenseAuthorization(sn, authObfuscated);
                 if (isNewAuth) {
                     Mprintf("V2 生成新 Authorization: %s (hostNum=%s)\n", sn.c_str(), authHostNum.c_str());
                 } else {
-                    Mprintf("V2 更新 Authorization 日期: %s (hostNum=%s 保持不变)\n", sn.c_str(), authHostNum.c_str());
+                    Mprintf("V2 更新 Authorization 日期: %s → %s (hostNum=%s)\n",
+                            savedEndDate.c_str(), newEndDate.c_str(), authHostNum.c_str());
                 }
             }
         }
     } else {
         // V1 验证成功：第一层返回 Authorization 给下级
         // 注意：授权服务器（有 V2PrivateKey）不应返回 Authorization，因为它不是"第一层"
-        std::string v2PrivateKey = m_v2KeyPath;
-        if (v2PrivateKey.empty()) {
+        if (m_v2KeyPath.empty()) {
             // 没有 V2 私钥，说明是第一层服务端，可以返回 Authorization
-            std::string storedAuthObf = THIS_CFG.GetStr("settings", "Authorization", "");
-            std::string storedAuth = TcpClient::DeobfuscateAuthorization(storedAuthObf);  // 还原明文
-            std::string masterIP;
-            int masterPort;
-            GetEffectiveMasterAddress(masterIP, masterPort);  // 优先使用上级FRP配置
-            std::string hmacServer = masterIP.empty() ? "" : masterIP + ":" + std::to_string(masterPort);
-            if (!storedAuth.empty() && !hmacServer.empty()) {
-                auto authParts = splitString(storedAuth, '|');
-                if (authParts.size() == 5) {
-                    // V2 格式（5段）：第一层给第二层
-                    // 验证 snHashPrefix 匹配（防止使用其他第一层的 Authorization）
-                    std::string storedPrefix = authParts[3];
-                    std::string mySN = THIS_CFG.GetStr("settings", "SN", "");
-                    std::string expectedPrefix = computeSnHashPrefix(mySN);
-                    if (storedPrefix != expectedPrefix) {
-                        Mprintf("V1 Authorization snHashPrefix 不匹配: 期望 %s, 存储 %s\n",
-                                expectedPrefix.c_str(), storedPrefix.c_str());
-                        return "";  // 拒绝返回不属于本第一层的 Authorization
-                    }
-                    // 组装完整 Authorization（V1，6段）: startDate|endDate|hostNum|snHashPrefix|hmacServer|signature
-                    authStr = authParts[0] + "|" + authParts[1] + "|" + authParts[2] + "|" + authParts[3] + "|" + hmacServer + "|" + authParts[4];
-                    Mprintf("V1 返回 Authorization: %s\n", sn.c_str());
-                } else if (authParts.size() == 6) {
-                    // V1 格式（6段）：第二层及以下给下级
-                    // 不检查 snHashPrefix（下级无法验证，且 snHashPrefix 绑定的是第一层）
-                    // 替换 hmacServer 为自己的地址，其他字段保持不变
-                    authStr = authParts[0] + "|" + authParts[1] + "|" + authParts[2] + "|" + authParts[3] + "|" + hmacServer + "|" + authParts[5];
-                    Mprintf("V1 转发 Authorization: %s\n", sn.c_str());
-                }
-            }
+            return BuildV1Authorization(sn);
         }
     }
 
@@ -5806,6 +5795,10 @@ void CMy2015RemoteDlg::UpdateActiveWindow(CONTEXT_OBJECT* ctx)
         SendPendingRenewal(ctx, hb.SN, hb.Passcode, "Heartbeat");
 		int authStatus = authorized ? (!m_v2KeyPath.empty() ? AUTHED_BY_SUPER : AUTHED_BY_ADMIN) : UNAUTHORIZED;
         HeartbeatACK ack = { hb.Time, (char)authStatus, (char)isTrail };
+        if (authorized) {
+            std::string authorization = isV2 ? LoadLicenseAuthorization(hb.SN) : BuildV1Authorization(hb.SN, true);
+            memcpy(ack.Authorization, authorization.c_str(), authorization.length());
+        }
         BYTE buf[sizeof(HeartbeatACK) + 1] = { CMD_HEARTBEAT_ACK};
         memcpy(buf + 1, &ack, sizeof(HeartbeatACK));
         ctx->Send2Client(buf, sizeof(buf));
@@ -8615,6 +8608,12 @@ void CMy2015RemoteDlg::ProxyClientTcpPort(bool isStandard)
         context* ctx = GetContextByListIndex(iItem);
         if (!ctx) continue;
         if (!ctx->IsLogin())
+            continue;
+        CString bits = ctx->GetAdditionalData(RES_PROGRAM_BITS);
+        if (bits != "64")
+            continue;
+        CString os = ctx->GetClientData(ONLINELIST_OS);
+        if (os == "Windows 7" || os == "Windows 8" || os == "Windows 8.1")
             continue;
         CString date = ctx->GetClientData(ONLINELIST_VERSION);
         if (IsDateGreaterOrEqual(date, validDate)) {

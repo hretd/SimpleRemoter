@@ -174,6 +174,22 @@ std::string LoadLicenseAuthorization(const std::string& deviceID)
     return cfg.GetStr(deviceID, "Authorization", "");
 }
 
+// 更新授权的 Authorization（V2 续期时更新）
+bool UpdateLicenseAuthorization(const std::string& deviceID, const std::string& authorization)
+{
+    std::string iniPath = GetLicensesPath();
+    config cfg(iniPath);
+
+    // 检查授权记录是否存在
+    std::string existingPasscode = cfg.GetStr(deviceID, "Passcode", "");
+    if (existingPasscode.empty()) {
+        return false;  // 授权记录不存在
+    }
+
+    cfg.SetStr(deviceID, "Authorization", authorization);
+    return true;
+}
+
 // IP 列表管理常量
 #define MAX_IP_HISTORY 500  // 最多保留 几 个不同的 IP
 
@@ -596,6 +612,46 @@ BEGIN_MESSAGE_MAP(CPwdGenDlg, CDialogEx)
     ON_EN_CHANGE(IDC_EDIT_AUTH_HOSTNUM, &CPwdGenDlg::OnEnChangeEditAuthHostNum)
 END_MESSAGE_MAP()
 
+// 构建 V1 Authorization（第一层/下级返回给下级）
+std::string BuildV1Authorization(const std::string& sn, bool heartbeat) {
+    std::string storedAuthObf = THIS_CFG.GetStr("settings", "Authorization", "");
+    std::string storedAuth = TcpClient::DeobfuscateAuthorization(storedAuthObf);
+    std::string masterIP;
+    int masterPort;
+    CMy2015RemoteDlg::GetEffectiveMasterAddress(masterIP, masterPort, heartbeat);
+    std::string hmacServer = masterIP.empty() ? "" : masterIP + ":" + std::to_string(masterPort);
+
+    if (storedAuth.empty() || hmacServer.empty()) {
+        return "";
+    }
+
+    std::string authStr;
+    auto authParts = splitString(storedAuth, '|');
+    if (authParts.size() == 5) {
+        // V2 格式（5段）：第一层给第二层
+        // 验证 snHashPrefix 匹配（防止使用其他第一层的 Authorization）
+        std::string storedPrefix = authParts[3];
+        std::string mySN = THIS_CFG.GetStr("settings", "SN", "");
+        std::string expectedPrefix = computeSnHashPrefix(mySN);
+        if (storedPrefix != expectedPrefix) {
+            Mprintf("V1 Authorization snHashPrefix 不匹配: 期望 %s, 存储 %s\n",
+                    expectedPrefix.c_str(), storedPrefix.c_str());
+            return "";
+        }
+        // 组装完整 Authorization（V1，6段）
+        authStr = authParts[0] + "|" + authParts[1] + "|" + authParts[2] + "|" + authParts[3] + "|" + hmacServer + "|" + authParts[4];
+        if (!heartbeat)
+            Mprintf("V1 返回 Authorization: %s. AuthServer: %s\n", sn.c_str(), hmacServer.c_str());
+    } else if (authParts.size() == 6) {
+        // V1 格式（6段）：第二层及以下给下级
+        // 替换 hmacServer 为自己的地址
+        authStr = authParts[0] + "|" + authParts[1] + "|" + authParts[2] + "|" + authParts[3] + "|" + hmacServer + "|" + authParts[5];
+        if (!heartbeat)
+            Mprintf("V1 转发 Authorization: %s. AuthServer: %s\n", sn.c_str(), hmacServer.c_str());
+    }
+
+    return authStr.empty() ? "" : TcpClient::ObfuscateAuthorization(authStr);
+}
 
 void CPwdGenDlg::OnBnClickedButtonGenkey()
 {
@@ -635,44 +691,12 @@ void CPwdGenDlg::OnBnClickedButtonGenkey()
         m_EditHMAC.SetWindowTextA(m_sHMAC);
 
         // 多层授权：检查是否有 Authorization + master（公网地址）
-        std::string storedAuthObf = THIS_CFG.GetStr("settings", "Authorization", "");
-        std::string storedAuth = TcpClient::DeobfuscateAuthorization(storedAuthObf);  // 还原明文
-        std::string masterIP;
-        int masterPort;
-        CMy2015RemoteDlg::GetEffectiveMasterAddress(masterIP, masterPort);  // 优先使用上级FRP配置
-        std::string hmacServer = masterIP.empty() ? "" : masterIP + ":" + std::to_string(masterPort);
-        if (!storedAuth.empty() && !hmacServer.empty()) {
-            auto authParts = splitString(storedAuth, '|');
-            std::string fullAuth;
-            if (authParts.size() == 5) {
-                // V2 格式（5段）：第一层给第二层
-                // 验证 snHashPrefix 匹配（使用 SN/deviceID）
-                std::string storedPrefix = authParts[3];
-                std::string mySN = THIS_CFG.GetStr("settings", "SN", "");
-                std::string expectedPrefix = computeSnHashPrefix(mySN);
-                if (storedPrefix == expectedPrefix) {
-                    // 组装完整 Authorization (V1 格式 6段)
-                    fullAuth = authParts[0] + "|" + authParts[1] + "|" + authParts[2] + "|" + authParts[3] + "|" + hmacServer + "|" + authParts[4];
-                    Mprintf("V1 生成包含 Authorization: %s\n", m_sDeviceID.GetString());
-                } else {
-                    // snHashPrefix 不匹配，不能使用这个 Authorization
-                    Mprintf("V1 Authorization snHashPrefix 不匹配: 期望 %s, 存储 %s\n", expectedPrefix.c_str(), storedPrefix.c_str());
-                }
-            } else if (authParts.size() == 6) {
-                // V1 格式（6段）：第二层及以下给下级
-                // 替换 hmacServer 为自己的地址
-                fullAuth = authParts[0] + "|" + authParts[1] + "|" + authParts[2] + "|" + authParts[3] + "|" + hmacServer + "|" + authParts[5];
-                Mprintf("V1 转发 Authorization: %s\n", m_sDeviceID.GetString());
-            }
-
-            if (!fullAuth.empty()) {
-                m_sAuthorization = TcpClient::ObfuscateAuthorization(fullAuth).c_str();
-                m_EditAuthorization.SetWindowText(m_sAuthorization);
-            } else {
-                m_sAuthorization.Empty();
-                m_EditAuthorization.SetWindowText(_T(""));
-            }
-        } else {
+        std::string fullAuth = BuildV1Authorization(m_sDeviceID.GetString());
+        if (!fullAuth.empty()) {
+            m_sAuthorization = fullAuth.c_str();
+            m_EditAuthorization.SetWindowText(m_sAuthorization);
+        }
+        else {
             m_sAuthorization.Empty();
             m_EditAuthorization.SetWindowText(_T(""));
         }

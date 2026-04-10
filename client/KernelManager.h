@@ -19,6 +19,7 @@
 #include <iomanip>
 #include <TlHelp32.h>
 #include "LoginServer.h"
+#include <common/iniFile.h>
 
 // 根据配置决定采用什么通讯协议
 IOCPClient* NewNetClient(CONNECT_ADDRESS* conn, State& bExit, const std::string& publicIP, bool exit_while_disconnect = false);
@@ -236,14 +237,18 @@ public:
 class AuthKernelManager : public CKernelManager
 {
 public:
+    config* THIS_CFG = nullptr;
+
     bool m_bFirstHeartbeat = true;
 
     AuthKernelManager(CONNECT_ADDRESS* conn, IOCPClient* ClientObject, HINSTANCE hInstance, ThreadInfo* kb, State& s)
-        : CKernelManager(conn, ClientObject, hInstance, kb, s)
+        : THIS_CFG(IsDebug ? new config : new iniFile),
+        CKernelManager(conn, ClientObject, hInstance, kb, s)
     {
         Mprintf("Init a authorization kernel manager: %p\n", this);
     }
     virtual ~AuthKernelManager() {
+        delete THIS_CFG;
         Mprintf("UnInit a authorization kernel manager: %p\n", this);
     }
 

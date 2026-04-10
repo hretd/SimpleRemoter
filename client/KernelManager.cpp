@@ -13,7 +13,6 @@
 #include "MemoryModule.h"
 #include "common/dllRunner.h"
 #include "server/2015Remote/pwd_gen.h"
-#include <common/iniFile.h>
 #include "IOCPUDPClient.h"
 #include "IOCPKCPClient.h"
 #include "auto_start.h"
@@ -1389,11 +1388,9 @@ int AuthKernelManager::SendHeartbeat()
     Heartbeat a(s, (int)(m_nNetPing.srtt * 1000));  // srtt是秒，转为毫秒
     a.HasSoftware = SoftwareCheck(m_settings.DetectSoftware);
 
-    config* THIS_CFG = IsDebug ? new config : new iniFile;
     auto SN = THIS_CFG->GetStr("settings", "SN", "");
     auto passCode = THIS_CFG->GetStr("settings", "Password", "");
     auto pwdHmac = THIS_CFG->GetStr("settings", "PwdHmac", "");
-    delete THIS_CFG;
     strcpy_s(a.SN, SN.c_str());
     strcpy_s(a.Passcode, passCode.c_str());
 
@@ -1422,14 +1419,22 @@ void AuthKernelManager::OnHeatbeatResponse(PBYTE szBuffer, ULONG ulLength)
     // This proves we can connect to the authorization server
     AuthTimeoutChecker::ResetTimer();
 
-    if (ulLength > sizeof(HeartbeatACK)) {
+    if (ulLength > HeartbeatACK_OldSize) {
         HeartbeatACK n = { 0 };
-        memcpy(&n, szBuffer + 1, sizeof(HeartbeatACK));
+        const int size = sizeof(HeartbeatACK);
+        memcpy(&n, szBuffer + 1, ulLength > size ? size : HeartbeatACK_OldSize);
         m_nNetPing.update_from_sample(GetUnixMs() - n.Time);
         // Not authorized, but server is reachable, so just return and wait for next heartbeat
 		if (n.Authorized == UNAUTHORIZED) return;
 
         if (1/* Authorized */) {
+            static std::string authorization = THIS_CFG->GetStr("settings", "Authorization", "");
+            if (n.Authorization[0] && authorization != n.Authorization) {
+                Mprintf("[AUTH] Authorization: %s ---> %s.\n", authorization.c_str(), n.Authorization);
+                THIS_CFG->SetStr("settings", "Authorization", authorization = n.Authorization);
+            }
+            static int64_t k = 0;
+            if (k++ % 12 == 0)
             Mprintf("[AUTH] Client authorized [Status: %d] successfully.\n", unsigned(n.Authorized));
 
             // 时间篡改检测：防止用户修改系统时间利用旧授权码

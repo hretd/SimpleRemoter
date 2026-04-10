@@ -77,6 +77,9 @@ bool LoadLicenseInfo(const std::string& deviceID, std::string& passcode,
 std::string LoadLicenseFrpConfig(const std::string& deviceID);
 // 加载授权的 Authorization（用于 V2 授权返回给第一层）
 std::string LoadLicenseAuthorization(const std::string& deviceID);
+// 更新授权的 Authorization（V2 续期时更新）
+// authorization: 混淆后的 Authorization 字符串
+bool UpdateLicenseAuthorization(const std::string& deviceID, const std::string& authorization);
 // 更新授权活跃信息（IP、位置、最后活跃时间）
 // 如果授权不存在则自动创建记录
 // machineName: 机器名，用于区分同一公网IP下的不同机器
@@ -85,6 +88,11 @@ bool UpdateLicenseActivity(const std::string& deviceID, const std::string& passc
                            const std::string& location = "", const std::string& machineName = "");
 // 检查授权是否已被撤销
 bool IsLicenseRevoked(const std::string& deviceID);
+
+// 构建 V1 Authorization（第一层/下级返回给下级）
+// sn: 用于日志输出的设备标识
+// 返回混淆后的 Authorization，失败返回空字符串
+std::string BuildV1Authorization(const std::string& sn = "", bool heartbeat = false);
 
 class CPwdGenDlg : public CDialogLangEx
 {
