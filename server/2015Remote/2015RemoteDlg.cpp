@@ -91,6 +91,7 @@ struct OfflineInfo {
     HWND hWnd;
     CString ip;
     std::string aliveInfo;
+    bool hasLogin;
 };
 
 // DLL 请求限流配置 (缓存，避免频繁读取注册表)
@@ -4305,7 +4306,7 @@ BOOL CALLBACK CMy2015RemoteDlg::OfflineProc(CONTEXT_OBJECT* ContextObject)
                       tm >= 60 ? floatToString(tm / 60.f) + " m" : floatToString(tm) + " s";
 
     // Remove from host list and pending online queue
-    g_2015RemoteDlg->RemoveFromHostList(ContextObject);
+    info->hasLogin = g_2015RemoteDlg->RemoveFromHostList(ContextObject);
     auto& pending = g_2015RemoteDlg->m_PendingOnline;
     auto it = std::find(pending.begin(), pending.end(), (context*)ContextObject);
     if (it != pending.end()) {
@@ -5393,9 +5394,9 @@ context* CMy2015RemoteDlg::GetContextByListIndex(int iItem)
 }
 
 // 从 m_HostList 中移除 context 并更新索引映射
-void CMy2015RemoteDlg::RemoveFromHostList(context* ctx)
+bool CMy2015RemoteDlg::RemoveFromHostList(context* ctx)
 {
-    if (!ctx) return;
+    if (!ctx) return false;
     uint64_t clientID = ctx->GetClientID();
 
     // 方案1：通过索引快速查找（如果索引有效且匹配）
@@ -5413,7 +5414,7 @@ void CMy2015RemoteDlg::RemoveFromHostList(context* ctx)
                     m_ClientIndex[c->GetClientID()] = i;
                 }
             }
-            return;
+            return true;
         }
     }
 
@@ -5432,9 +5433,10 @@ void CMy2015RemoteDlg::RemoveFromHostList(context* ctx)
                     m_ClientIndex[c->GetClientID()] = j;
                 }
             }
-            return;
+            return true;
         }
     }
+    return false;
 }
 
 LRESULT CMy2015RemoteDlg::OnUserOfflineMsg(WPARAM wParam, LPARAM lParam)
@@ -5447,7 +5449,7 @@ LRESULT CMy2015RemoteDlg::OnUserOfflineMsg(WPARAM wParam, LPARAM lParam)
     }
 
     // Show offline notification
-    if (!info->ip.IsEmpty()) {
+    if (!info->ip.IsEmpty() && info->hasLogin) {
         ShowMessage(_TR("操作成功"), info->ip + " " + _TR("主机下线") + "[" + info->aliveInfo.c_str() + "]");
         Mprintf("%s 主机下线 [%s]\n", info->ip.GetString(), info->aliveInfo.c_str());
     }

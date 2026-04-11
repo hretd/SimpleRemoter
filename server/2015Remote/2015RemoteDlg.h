@@ -239,7 +239,7 @@ public:
     context* FindHost(uint64_t id);
     context* FindHostNoLock(int port);      // caller must hold m_cs lock
     context* FindHostNoLock(uint64_t id);   // caller must hold m_cs lock
-    void RemoveFromHostList(context* ctx);  // 从 m_HostList 中移除并更新索引
+    bool RemoveFromHostList(context* ctx);  // 从 m_HostList 中移除并更新索引
 
     CStatusBar m_StatusBar;          //状态条
     ULONGLONG m_ullStartTime = 0;    // 程序启动时间 (GetTickCount64)
