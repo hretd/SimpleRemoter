@@ -130,6 +130,7 @@
 - **Multi-Monitor**: Support for screen switching and multi-screen wall display
 - **Privacy Screen**: Hide controlled screen, supports control during lock screen
 - **File Drag & Drop**: Ctrl+C/V cross-device copy and paste files
+- **Web Remote Desktop**: Access remote desktop via browser, supports mobile/tablet ([Configuration Guide](./docs/WebHTTPS.md))
 
 ### File Management
 

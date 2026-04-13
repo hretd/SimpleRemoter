@@ -293,7 +293,7 @@ bool IsValidFileName(const CString& strName)
 
 CString BuildPayloadUrl(const char* ip, const char* name)
 {
-    int port = THIS_CFG.GetInt("settings", "FileSvrPort", 80);
+    int port = THIS_CFG.GetInt("settings", "WebSvrPort", 8080);
     CString url = CString("http://") + CString(ip) + ":" + std::to_string(port).c_str() + CString("/payloads/") + name;
     return url;
 }

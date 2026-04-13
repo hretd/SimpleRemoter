@@ -11,7 +11,7 @@
 #include <mutex>
 #include <vector>
 #include <string>
-#include "file_server.h"
+#include "WebService.h"
 #include "CListCtrlEx.h"
 #include "LangManager.h"
 #include "client/MemoryModule.h"
@@ -132,7 +132,6 @@ protected:
     DWORD g_StartTick;
     BOOL m_bHookWIN = TRUE;
     BOOL m_runNormal = FALSE;
-    FileDownloadServer* m_FileServer = nullptr;
     // 生成的消息映射函数
     virtual BOOL OnInitDialog();
     afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
@@ -150,6 +149,8 @@ public:
         BOOL isGrid = id == IDD_DIALOG_SCREEN_SPY;
         BOOL ok = (isGrid&&m_gridDlg) ? m_gridDlg->HasSlot() : FALSE;
         Dlg->Create(id, ok ? m_gridDlg : GetDesktopWindow());
+
+        // Check if this is a web-triggered ScreenSpyDlg session - hide window if so
         Dlg->ShowWindow(Show);
         if (ok) {
             m_gridDlg->AddChild((CDialog*)Dlg);
@@ -269,6 +270,7 @@ public:
     CDialogBase* GetRemoteWindow(HWND hWnd);
     CDialogBase* GetRemoteWindow(CDialogBase* dlg);
     void RemoveRemoteWindow(HWND wnd);
+    void CloseRemoteDesktopByClientID(uint64_t clientID);
     CDialogBase* m_pActiveSession = nullptr; // 当前活动会话窗口指针 / NULL 表示无
     void UpdateActiveRemoteSession(CDialogBase* sess);
     CDialogBase* GetActiveRemoteSession();

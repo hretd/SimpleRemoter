@@ -127,14 +127,17 @@ CScreenManager::CScreenManager(IOCPClient* ClientObject, int n, void* user, BOOL
     m_ClientObject->SetMultiThreadCompress(threadNum);
 
     // 启用多显示器支持时，需要固定传输质量
+    BYTE algo = ALGORITHM_DIFF;
     BOOL all = FALSE;
     if (!(user == NULL || ((int)user) == 1)) {
         UserParam* param = (UserParam*)user;
         if (param) {
+            algo = param->length > 1 ? param->buffer[1] : algo;
             all = param->length > 2 ? param->buffer[2] : all;
         }
     }
 
+    BOOL fixedQuality = all || algo == ALGORITHM_H264;
     m_ScreenSettings.MaxFPS = m_nMaxFPS;
     m_ScreenSettings.CompressThread = threadNum;
     m_ScreenSettings.ScreenStrategy = cfg.GetInt("settings", "ScreenStrategy", 0);
@@ -143,7 +146,7 @@ CScreenManager::CScreenManager(IOCPClient* ClientObject, int n, void* user, BOOL
     m_ScreenSettings.FullScreen = cfg.GetInt("settings", "FullScreen", priv);
     m_ScreenSettings.RemoteCursor = cfg.GetInt("settings", "RemoteCursor", 0);
     m_ScreenSettings.ScrollDetectInterval = cfg.GetInt("settings", "ScrollDetectInterval", 2);  // 默认每2帧
-    m_ScreenSettings.QualityLevel = cfg.GetInt("settings", "QualityLevel", all ? QUALITY_GOOD : QUALITY_ADAPTIVE);
+    m_ScreenSettings.QualityLevel = cfg.GetInt("settings", "QualityLevel", fixedQuality ? QUALITY_GOOD : QUALITY_ADAPTIVE);
     m_ScreenSettings.CpuSpeedup = cfg.GetInt("settings", "CpuSpeedup", 0);
     m_ScreenSettings.AudioEnabled = cfg.GetInt("settings", "AudioEnabled", 0);  // 默认禁用音频
 

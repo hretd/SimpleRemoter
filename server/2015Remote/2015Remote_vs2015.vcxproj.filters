@@ -78,6 +78,7 @@
     <ClCompile Include="NetworkDlg.cpp" />
     <ClCompile Include="IPHistoryDlg.cpp" />
     <ClCompile Include="FeatureLimitsDlg.cpp" />
+    <ClCompile Include="WebService.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\client\Audio.h" />
@@ -176,6 +177,10 @@
     <ClInclude Include="FeatureLimitsDlg.h" />
     <ClInclude Include="FeatureFlags.h" />
     <ClInclude Include="UIBranding.h" />
+    <ClInclude Include="WebService.h" />
+    <ClInclude Include="WebServiceAuth.h" />
+    <ClInclude Include="WebPage.h" />
+    <ClInclude Include="SimpleWebSocket.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="2015Remote.rc" />

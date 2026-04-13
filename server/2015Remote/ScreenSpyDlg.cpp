@@ -18,6 +18,7 @@
 #include <md5.h>
 #include <cstdint>  // for uint16_t
 #include <vector>
+#include "WebService.h"
 
 // 文件接收消息数据结构
 struct FileV2MsgData {
@@ -945,6 +946,19 @@ VOID CScreenSpyDlg::OnReceiveComplete()
         PrepareDrawing(m_BitmapInfor_Full);
         // 分辨率切换完成，允许解码
         m_bResolutionChanging = false;
+        // Notify web clients of resolution change
+        if (WebService().IsRunning()) {
+            int width = m_BitmapInfor_Full->bmiHeader.biWidth;
+            int height = abs(m_BitmapInfor_Full->bmiHeader.biHeight);
+            WebService().NotifyResolutionChange(m_ClientID, width, height);
+
+            // Hide window if this session was triggered by web client (and hiding is enabled)
+            if (WebService().IsWebTriggered(m_ClientID) && WebService().GetHideWebSessions()) {
+                m_bHide = true;
+                ShowWindow(SW_HIDE);
+                Mprintf("[ScreenSpyDlg] Web-triggered session, hiding window for device %llu\n", m_ClientID);
+            }
+        }
         break;
     }
     case COMMAND_FILE_QUERY_RESUME: {
@@ -1316,8 +1330,45 @@ VOID CScreenSpyDlg::DrawNextScreenDiff(bool keyFrame)
             break;
         }
         case ALGORITHM_H264: {
-            if (Decode((LPBYTE)NextScreenData, NextScreenLength)) {
-                bChange = TRUE;
+            // Only decode locally if dialog is visible (skip when hidden for web-only viewing)
+            if (!m_bHide) {
+                if (Decode((LPBYTE)NextScreenData, NextScreenLength)) {
+                    bChange = TRUE;
+                }
+            }
+            // Broadcast H264 frame to web clients
+            // Format: [DeviceID:4][FrameType:1][DataLen:4][H264Data:N]
+            if (NextScreenLength > 0 && WebService().IsRunning()) {
+                // Detect H264 keyframe by checking NAL unit type
+                // NAL type 5 = IDR slice (keyframe), NAL type 7 = SPS, NAL type 8 = PPS
+                bool isKeyFrame = false;
+                LPBYTE h264Data = (LPBYTE)NextScreenData;
+                for (ULONG i = 0; i + 4 < NextScreenLength; i++) {
+                    // Look for start code: 0x00 0x00 0x00 0x01 or 0x00 0x00 0x01
+                    if ((h264Data[i] == 0 && h264Data[i+1] == 0 && h264Data[i+2] == 0 && h264Data[i+3] == 1) ||
+                        (h264Data[i] == 0 && h264Data[i+1] == 0 && h264Data[i+2] == 1)) {
+                        int nalOffset = (h264Data[i+2] == 1) ? i + 3 : i + 4;
+                        if (nalOffset < (int)NextScreenLength) {
+                            int nalType = h264Data[nalOffset] & 0x1F;
+                            if (nalType == 5 || nalType == 7 || nalType == 8) {
+                                isKeyFrame = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                std::vector<uint8_t> packet(4 + 1 + 4 + NextScreenLength);
+                uint32_t deviceIdLow = (uint32_t)(m_ClientID & 0xFFFFFFFF);
+                uint8_t frameType = isKeyFrame ? 1 : 0;
+                uint32_t dataLen = (uint32_t)NextScreenLength;
+
+                memcpy(packet.data(), &deviceIdLow, 4);
+                packet[4] = frameType;
+                memcpy(packet.data() + 5, &dataLen, 4);
+                memcpy(packet.data() + 9, NextScreenData, NextScreenLength);
+
+                WebService().BroadcastH264Frame(m_ClientID, packet.data(), packet.size());
             }
             break;
         }

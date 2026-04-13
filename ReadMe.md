@@ -131,6 +131,7 @@
 - **多显示器**：支持多屏切换和多屏上墙显示
 - **隐私屏幕**：被控端屏幕可隐藏，支持锁屏状态下控制
 - **文件拖拽**：Ctrl+C/V 跨设备复制粘贴文件
+- **Web 远程桌面**：通过浏览器访问远程桌面，支持手机/平板（[配置指南](./docs/WebHTTPS.md)）
 
 ### 文件管理
 
@@ -448,6 +449,7 @@ git clone https://github.com/yuanyuanxiang/SimpleRemoter.git
 | 📖 [日常使用手册](./docs/UserManual.md) | 所有用户 | 远程桌面、文件管理、终端、进程管理等功能详解 |
 | 📖 [代理商运营手册](./docs/AgentManual.md) | 代理商/分销商 | 下级授权管理、FRP 代理服务配置 |
 | 📖 [定制化开发指南](./docs/CustomizationGuide.md) | 技术型客户 | 品牌定制、界面修改、二次开发 |
+| 📖 [Web 远程桌面配置](./docs/WebHTTPS.md) | 移动端用户 | 通过浏览器访问远程桌面，支持手机/平板 |
 
 ---
 

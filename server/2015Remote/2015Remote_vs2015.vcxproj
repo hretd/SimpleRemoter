@@ -372,9 +372,14 @@
     <ClInclude Include="ServerSessionMonitor.h" />
     <ClInclude Include="CIconButton.h" />
     <ClInclude Include="TerminalModuleLoader.h" />
+    <ClInclude Include="WebService.h" />
+    <ClInclude Include="WebServiceAuth.h" />
+    <ClInclude Include="WebPage.h" />
+    <ClInclude Include="SimpleWebSocket.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\client\Audio.cpp" />
+    <ClCompile Include="WebService.cpp" />
     <ClCompile Include="..\..\client\MemoryModule.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
