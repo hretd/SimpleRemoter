@@ -1488,15 +1488,15 @@ inline std::string GetWebPageHTML() {
                 const msg = { cmd: 'mouse', token, type, x, y, button: button || 0 };
                 if (delta !== undefined) msg.delta = delta;
                 ws.send(JSON.stringify(msg));
-                // Debug: show sent message
-                console.log('[Mouse]', type, x, y, button);
             }
         }
 
-        function sendKey(keyCode, isDown) {
+        function sendKey(keyCode, isDown, altKey) {
             if (!controlEnabled) return;  // Control mode required
+            // Filter Windows keys (handled locally, not sent to remote)
+            if (keyCode === 91 || keyCode === 92) return;  // VK_LWIN, VK_RWIN
             if (ws && ws.readyState === WebSocket.OPEN && token) {
-                ws.send(JSON.stringify({ cmd: 'key', token, keyCode, down: isDown }));
+                ws.send(JSON.stringify({ cmd: 'key', token, keyCode, down: isDown, alt: !!altKey }));
             }
         }
 
@@ -1846,7 +1846,7 @@ inline std::string GetWebPageHTML() {
             if (e.target.tagName === 'INPUT') return;
             if (e.key === 'F11') return;
             e.preventDefault();
-            sendKey(e.keyCode, true);
+            sendKey(e.keyCode, true, e.altKey);
         });
 
         document.addEventListener('keyup', function(e) {
@@ -1854,7 +1854,7 @@ inline std::string GetWebPageHTML() {
             if (e.target.tagName === 'INPUT') return;
             if (e.key === 'F11') return;
             e.preventDefault();
-            sendKey(e.keyCode, false);
+            sendKey(e.keyCode, false, e.altKey);
         });
 
         mobileKeyboard.addEventListener('input', function(e) {

@@ -613,11 +613,8 @@ void CWebService::HandleMouse(void* ws_ptr, const std::string& msg) {
     Json::Value root;
     Json::Reader reader;
     if (!reader.parse(msg, root)) {
-        Mprintf("[WebService] HandleMouse: JSON parse failed\n");
         return;
     }
-
-    Mprintf("[WebService] HandleMouse: %s\n", msg.c_str());
 
     std::string token = root.get("token", "").asString();
     std::string type = root.get("type", "").asString();
@@ -648,7 +645,6 @@ void CWebService::HandleMouse(void* ws_ptr, const std::string& msg) {
     // Get screen context (not main context!)
     CONTEXT_OBJECT* ctx = GetScreenContext(device_id);
     if (!ctx) {
-        Mprintf("[WebService] HandleMouse: No screen context for device %llu\n", device_id);
         return;
     }
 
@@ -705,13 +701,94 @@ void CWebService::HandleMouse(void* ws_ptr, const std::string& msg) {
     BYTE szData[length + 4];
     szData[0] = COMMAND_SCREEN_CONTROL;
     memcpy(szData + 1, &msg64, sizeof(MSG64));
-    Mprintf("[WebService] Sending mouse cmd to device %llu: type=%s x=%d y=%d msg=0x%X\n",
-            device_id, type.c_str(), x, y, (unsigned int)msg64.message);
     ctx->Send2Client(szData, length);
 }
 
 void CWebService::HandleKey(void* ws_ptr, const std::string& msg) {
-    // TODO: Phase 2 - Forward keyboard events to device
+    // Parse JSON
+    Json::Value root;
+    Json::Reader reader;
+    if (!reader.parse(msg, root)) {
+        return;
+    }
+
+    std::string token = root.get("token", "").asString();
+    int keyCode = root.get("keyCode", 0).asInt();
+    bool isDown = root.get("down", false).asBool();
+    bool altKey = root.get("alt", false).asBool();
+
+    // Filter Windows keys (same as MFC version)
+    if (keyCode == VK_LWIN || keyCode == VK_RWIN) {
+        return;
+    }
+
+    // Validate token
+    std::string username, role;
+    if (!ValidateToken(token, username, role)) {
+        return;
+    }
+
+    // Get device being watched
+    uint64_t device_id = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_ClientsMutex);
+        auto it = m_Clients.find(ws_ptr);
+        if (it != m_Clients.end()) {
+            device_id = it->second.watch_device_id;
+            it->second.last_activity = (uint64_t)time(nullptr);
+        }
+    }
+
+    if (device_id == 0) return;
+
+    // Get screen context
+    CONTEXT_OBJECT* ctx = GetScreenContext(device_id);
+    if (!ctx) {
+        return;
+    }
+
+    // Build MSG64 structure
+    MSG64 msg64;
+    memset(&msg64, 0, sizeof(MSG64));
+
+    // Use WM_SYSKEYDOWN/UP for Alt combinations (same as MFC version)
+    if (altKey) {
+        msg64.message = isDown ? WM_SYSKEYDOWN : WM_SYSKEYUP;
+    } else {
+        msg64.message = isDown ? WM_KEYDOWN : WM_KEYUP;
+    }
+    msg64.wParam = keyCode;
+    msg64.time = GetTickCount();
+
+    // Build lParam for keyboard message:
+    // bits 0-15: repeat count (1)
+    // bits 16-23: scan code
+    // bit 24: extended key flag
+    // bit 29: context code (1 if Alt is pressed)
+    // bit 30: previous key state (1 for keyup)
+    // bit 31: transition state (1 for keyup)
+    UINT scanCode = MapVirtualKey(keyCode, MAPVK_VK_TO_VSC);
+
+    // Extended keys: arrows, insert, delete, home, end, page up/down, numpad enter, etc.
+    bool isExtended = (keyCode >= VK_PRIOR && keyCode <= VK_DOWN) ||  // Page Up/Down, End, Home, Arrows
+                      keyCode == VK_INSERT || keyCode == VK_DELETE ||
+                      keyCode == VK_NUMLOCK || keyCode == VK_RCONTROL || keyCode == VK_RMENU ||
+                      keyCode == VK_APPS;
+
+    LPARAM lParam = 1;  // repeat count = 1
+    lParam |= (scanCode & 0xFF) << 16;
+    if (isExtended) lParam |= (1 << 24);
+    if (altKey) lParam |= (1 << 29);  // context code for Alt
+    if (!isDown) lParam |= (3UL << 30);  // bit 30 and 31 set for key up
+
+    msg64.lParam = lParam;
+
+    // Send command to device
+    const int length = sizeof(MSG64) + 1;
+    BYTE szData[length + 4];
+    szData[0] = COMMAND_SCREEN_CONTROL;
+    memcpy(szData + 1, &msg64, sizeof(MSG64));
+    ctx->Send2Client(szData, length);
 }
 
 void CWebService::HandleRdpReset(void* ws_ptr, const std::string& token) {
